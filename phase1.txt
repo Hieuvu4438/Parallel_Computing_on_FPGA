@@ -1,0 +1,52 @@
+🚀 1. Build Dự Án
+# Bước 1: Vào thư mục dự áncd /home/iec/Parallel_Computing_on_FPGA# Bước 2: Tạo thư mục build và buildmkdir -p build && cd buildcmake ..make -j4# Kết quả: Tạo ra 2 file thực thi#   - respiratory_analysis  (chương trình chính)#   - test_signal_prep      (unit tests)
+🎯 2. Chạy Chương Trình
+A. Xử lý toàn bộ ICBHI Dataset
+# Chạy từ thư mục gốc dự án (QUAN TRỌNG!)cd /home/iec/Parallel_Computing_on_FPGA./build/respiratory_analysis
+B. Chạy nhanh với 10 file đầu tiên (test)
+./build/respiratory_analysis --test
+C. Xử lý một file WAV cụ thể
+./build/respiratory_analysis path/to/file.wav
+D. Chỉ xem thống kê
+./build/respiratory_analysis --stats
+E. Chỉ định đường dẫn dataset khác
+./build/respiratory_analysis --path /path/to/custom/dataset
+F. Chạy Unit Tests
+./build/test_signal_prep
+💻 3. Sử Dụng Trong Code C++
+A. Xử lý một file WAV đơn lẻ
+#include "SignalPrep.hpp"using namespace respiratory;int main() {    SignalProcessor processor;    std::vector<BreathingCycle> cycles;        // Xử lý file    if (processor.processFile("audio.wav", cycles)) {        // Lấy tín hiệu đã xử lý        const auto& signal = processor.getProcessedSignal();                std::cout << "Sample rate: " << processor.getCurrentSampleRate() << " Hz\n";        std::cout << "Samples: " << signal.size() << "\n";        std::cout << "Cycles: " << cycles.size() << "\n";    }    return 0;}
+B. Load toàn bộ ICBHI Dataset
+#include "SignalPrep.hpp"using namespace respiratory;int main() {    // Khởi tạo DatasetManager với đường dẫn dataset    DatasetManager manager("data/samples/ICBHI_final_database");        // Load dataset    std::vector<LabeledBreathingCycle> dataset;    manager.loadDataset(dataset, true);  // true = verbose mode        // In thống kê    manager.getStatistics().print();        // Duyệt qua từng chu kỳ    for (const auto& cycle : dataset) {        std::cout << "Patient: " << cycle.patientInfo.patientId                  << " | Label: " << cycle.getLabelString()                  << " | Duration: " << cycle.duration << "s"                  << " | Samples: " << cycle.samples.size() << "\n";    }        return 0;}
+C. Chia Train/Test Sets
+std::vector<LabeledBreathingCycle> trainSet, testSet;// Chia 80% train, 20% test với seed=42 để reproducibleDatasetManager::splitDataset(dataset, 0.8f, trainSet, testSet, 42);std::cout << "Train: " << trainSet.size() << " samples\n";std::cout << "Test: " << testSet.size() << " samples\n";
+D. Lọc theo nhãn
+std::vector<LabeledBreathingCycle> crackleOnly;// Lấy chỉ các mẫu có CrackleDatasetManager::filterByLabel(dataset, RespiratoryLabel::CRACKLE, crackleOnly);std::cout << "Crackle samples: " << crackleOnly.size() << "\n";
+E. Load với Progress Callback
+manager.loadDatasetWithProgress(dataset,    [](size_t current, size_t total) {        float percent = 100.0f * current / total;        std::cout << "\rProgress: " << percent << "%    " << std::flush;    });
+📊 4. Cấu Trúc Dữ Liệu Output
+LabeledBreathingCycle - Chu kỳ hô hấp đã gán nhãn
+Field	Type	Mô tả
+samples	vector<float>	Dữ liệu tín hiệu đã xử lý (4kHz, normalized)
+label	RespiratoryLabel	Nhãn: NORMAL, CRACKLE, WHEEZE, BOTH
+patientInfo	PatientInfo	Thông tin bệnh nhân
+startTime	float	Thời điểm bắt đầu trong file gốc (giây)
+endTime	float	Thời điểm kết thúc (giây)
+duration	float	Thời lượng (giây)
+sourceFile	string	Tên file nguồn
+PatientInfo - Thông tin bệnh nhân
+Field	Type	Mô tả
+patientId	int	Mã bệnh nhân (101-226)
+chestLocation	string	Vị trí nghe (Al, Ar, Pl, Pr, Tc...)
+equipment	string	Thiết bị (Meditron, LittC2SE...)
+⚙️ 5. Các Hằng Số Cấu Hình
+Định nghĩa trong SignalPrep.hpp:
+constexpr float TARGET_SAMPLE_RATE = 4000.0f;   // Hzconstexpr float BANDPASS_LOW_FREQ = 50.0f;      // Hzconstexpr float BANDPASS_HIGH_FREQ = 2500.0f;   // Hzconstexpr int FILTER_ORDER = 4;                  // Butterworth order
+📁 6. Cấu Trúc Thư Mục Dự Án
+Parallel_Computing_on_FPGA/├── build/                      # Thư mục build (tự động tạo)│   ├── respiratory_analysis    # Chương trình chính│   └── test_signal_prep        # Unit tests├── data/│   └── samples/│       └── ICBHI_final_database/   # Dataset ICBHI│           ├── 101_1b1_Al_sc_Meditron.wav│           ├── 101_1b1_Al_sc_Meditron.txt│           └── ...├── include/│   ├── SignalPrep.hpp          # Header chính│   ├── Common.h                # Types chung│   └── dr_wav.h                # Thư viện đọc WAV├── src/│   ├── preprocessing/│   │   └── SignalPrep.cpp      # Implementation│   └── main.cpp                # Entry point├── tests/│   └── test_signal_prep.cpp    # Unit tests└── CMakeLists.txt              # Build config
+❓ 7. Lưu Ý Quan Trọng
+Chạy từ thư mục gốc: Phải chạy từ /home/iec/Parallel_Computing_on_FPGA để đường dẫn tương đối hoạt động đúng
+Định dạng WAV: Hỗ trợ 8/16/24/32-bit PCM và float
+Tần số Nyquist: Nếu sample rate < 5kHz, high cutoff sẽ tự động điều chỉnh xuống 95% Nyquist
+Memory: Dataset ICBHI ~7000 cycles, mỗi cycle ~2-3 giây = ~10,000 samples float = ~40KB → Tổng ~280MB RAM
+Bạn có câu hỏi cụ thể nào về cách sử dụng không?

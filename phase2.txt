@@ -1,0 +1,35 @@
+Hoàn thành Giai đoạn 2: Feature Extraction
+Tất cả 14/14 tests passed! Dưới đây là tóm tắt:
+📊 Kết quả Test Feature Extraction
+Test	Kết quả
+ZCR Calculation	✅ PASS
+RMSE Calculation	✅ PASS
+Mel Conversion	✅ PASS
+MFCC Extraction	✅ PASS
+Flat Feature Vector	✅ PASS
+🎯 Các Đặc Trưng Đã Triển Khai
+Time-Domain Features (5)
+Feature	Công thức	Mô tả
+EED	\E_max - E_min\		Extreme Energy Difference
+ZCR_mean	Σ\sgn[x(n)]-sgn[x(n-1)]\/2(N-1)	Mean Zero Crossing Rate
+ZCR_std	std(ZCR)	Standard deviation
+RMSE_mean	√(Σx²/N)	Mean Root Mean Square Energy
+RMSE_std	std(RMSE)	Standard deviation
+MFCC Features (78)
+Feature	Số chiều	Mô tả
+MFCC Static	13 mean + 13 std	Mel-Frequency Cepstral Coefficients
+Delta MFCC	13 mean + 13 std	First derivative (velocity)
+Delta-Delta MFCC	13 mean + 13 std	Second derivative (acceleration)
+Tổng: 83 features cho mỗi chu kỳ hô hấp
+📁 Files Đã Tạo/Cập Nhật
+File	Mô tả
+include/FeatureExtraction.h	Header với class FeatureExtractor
+src/features/FeatureExtraction.cpp	Implementation đầy đủ
+src/main.cpp	Thêm --features và --extract options
+tests/test_signal_prep.cpp	Thêm 5 unit tests cho features
+🚀 Cách Sử Dụng
+# Test feature extraction (xem chi tiết)./build/respiratory_analysis --features# Extract tất cả features và lưu CSV./build/respiratory_analysis --extract# Extract quick mode (20 files)./build/respiratory_analysis --extract --test# Chạy unit tests./build/test_signal_prep
+💾 Output CSV Format
+File features.csv chứa:
+patient_id, label, duration, EED, ZCR_mean, ZCR_std, RMSE_mean, RMSE_std,MFCC0_mean...MFCC12_mean, MFCC0_std...MFCC12_std,Delta0_mean...Delta12_mean, Delta0_std...Delta12_std,Delta2_0_mean...Delta2_12_mean, Delta2_0_std...Delta2_12_std
+Sẵn sàng cho Phase 3: Random Forest / CNN Classification!
