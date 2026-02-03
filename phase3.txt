@@ -1,0 +1,35 @@
+Tóm tắt Phase 3: Cascaded Classification Framework
+Đã triển khai thành công hệ thống phân loại phân tầng theo bài báo IEEE với 2,143 dòng code mới.
+Cấu trúc Files
+File	Mô tả	Lines
+include/CascadedLogic.h	Header với class definitions	815
+src/classifiers/CascadedLogic.cpp	Implementation chính	1086
+src/classifiers/RandomForestCPU.cpp	Utilities & evaluation	242
+Classes đã triển khai
+1. DecisionTree
+Cây quyết định với Gini impurity
+Array-based storage (HLS-friendly)
+Train & predict interface
+2. RandomForest
+Ensemble của nhiều Decision Trees
+Bootstrap sampling
+Probability aggregation
+3. SeptupleForest (Theo bài báo)
+7 RF clusters hoạt động song song
+Majority voting với ngưỡng λ = 4
+Công thức: Decision = Class c nếu Σ I(Oj = c) ≥ 4
+4. CascadedController (State Machine)
+Layer 1 (Global Screening): Metadata + Global Energy → Filter healthy
+Layer 2 (Transient Detection): ZCR + Amplitude → Detect Crackles
+Layer 3 (Spectral Screening): MFCC → Spectral anomalies
+Early-exit mechanism: Thoát khi đạt consensus hoặc confidence > τ
+CNN fallback: Signal khi cần deep analysis
+Kết quả Test
+Quick Test (50 files):- Accuracy: ~65-77%- Early Exit Rate: 97-100% tại Layer 1- Training time: < 1 secondUnit Tests: 18/18 passed
+Sử dụng
+# Train và test classifier./build/respiratory_analysis --classify --test   # Quick mode (50 files)./build/respiratory_analysis --classify          # Full dataset
+Tính năng HLS-Ready
+State machine pattern (switch-case)
+Array-based tree storage
+Interface rõ ràng cho IP Core replacement
+Không dynamic allocation trong inference loop
