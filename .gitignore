@@ -1,6 +1,3 @@
-cd /home/iec/Parallel_Computing_on_FPGA
-
-cat > .gitignore << 'EOF'
 # Build directory
 build/
 
@@ -11,6 +8,33 @@ data/
 *.csv
 *.o
 *.a
+*.pth
+*.onnx
+*.png
+*.jpg
+*.jpeg
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+*.egg
+
+# Virtual environment
+venv/
+env/
+ENV/
+my_venv/
+.venv
+
+# Output directories
+output_*/
+results/
+checkpoints/
 
 # IDE
 .vscode/
@@ -21,4 +45,6 @@ data/
 # OS
 .DS_Store
 Thumbs.db
-EOF
+
+# Logs
+*.log

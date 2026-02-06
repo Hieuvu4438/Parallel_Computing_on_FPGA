@@ -526,6 +526,15 @@ int testCascadedClassifier(const std::string& datasetPath, bool quickMode) {
     // Initialize and train controller
     CascadedController controller;
     
+    // Enable CNN fallback for Layer 4
+    controller.enableCNNFallback(true);
+    
+    // Display threshold settings
+    std::cout << "Confidence Thresholds (stricter to reduce over-exit):\n";
+    std::cout << "  Layer 1: " << controller.getConfidenceThreshold(CascadeLayer::LAYER_1_GLOBAL) << "\n";
+    std::cout << "  Layer 2: " << controller.getConfidenceThreshold(CascadeLayer::LAYER_2_TRANSIENT) << "\n";
+    std::cout << "  Layer 3: " << controller.getConfidenceThreshold(CascadeLayer::LAYER_3_SPECTRAL) << "\n\n";
+    
     auto startTime = std::chrono::high_resolution_clock::now();
     
     trainAndEvaluateCascaded(trainData, testData, controller, true);
@@ -533,12 +542,41 @@ int testCascadedClassifier(const std::string& datasetPath, bool quickMode) {
     auto endTime = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::seconds>(endTime - startTime);
     
+    // Display Layer statistics
     std::cout << "\n═══════════════════════════════════════════════════════════════\n";
-    std::cout << "Total time: " << duration.count() << " seconds\n";
+    std::cout << "                     EXIT LAYER STATISTICS                      \n";
     std::cout << "═══════════════════════════════════════════════════════════════\n";
     
-    // Demo prediction on a few samples
-    std::cout << "\n[Demo Predictions]\n";
+    auto stats = controller.getExitStatistics();
+    float totalPred = static_cast<float>(stats.totalPredictions);
+    
+    std::cout << std::fixed << std::setprecision(2);
+    std::cout << "  Layer 1 Exits: " << stats.layer1Exits 
+              << " (" << (stats.layer1Exits / totalPred * 100.0f) << "%)\n";
+    std::cout << "  Layer 2 Exits: " << stats.layer2Exits 
+              << " (" << (stats.layer2Exits / totalPred * 100.0f) << "%)\n";
+    std::cout << "  Layer 3 Exits: " << stats.layer3Exits 
+              << " (" << (stats.layer3Exits / totalPred * 100.0f) << "%)\n";
+    std::cout << "  Layer 4 (CNN): " << stats.cnnFallbacks 
+              << " (" << (stats.cnnFallbacks / totalPred * 100.0f) << "%)\n";
+    std::cout << "  Total:         " << stats.totalPredictions << "\n";
+    std::cout << "═══════════════════════════════════════════════════════════════\n";
+    
+    // Check if Layer 4 fallback rate is in target range
+    float layer4Rate = stats.cnnFallbacks / totalPred;
+    if (layer4Rate >= 0.20f && layer4Rate <= 0.30f) {
+        std::cout << "✓ Layer 4 fallback rate is within target range (20-30%)\n";
+    } else if (layer4Rate < 0.20f) {
+        std::cout << "⚠ Layer 4 fallback rate too low - consider tightening thresholds\n";
+    } else {
+        std::cout << "⚠ Layer 4 fallback rate too high - consider relaxing thresholds\n";
+    }
+    
+    std::cout << "\nTotal time: " << duration.count() << " seconds\n";
+    std::cout << "═══════════════════════════════════════════════════════════════\n";
+    
+    // Demo prediction on a few samples with Layer 4 info
+    std::cout << "\n[Demo Predictions with Layer 4 Support]\n";
     
     FeatureExtractor extractor(FEATURE_SAMPLE_RATE);
     
@@ -557,8 +595,12 @@ int testCascadedClassifier(const std::string& datasetPath, bool quickMode) {
                       << "Actual=" << labelToString(cycle.label)
                       << ", Predicted=" << result.getClassName()
                       << ", Confidence=" << std::fixed << std::setprecision(3) << result.confidence
-                      << ", ExitLayer=" << cascadeLayerToString(result.exitLayer)
-                      << "\n";
+                      << ", ExitLayer=" << cascadeLayerToString(result.exitLayer);
+            
+            if (result.needsCNN) {
+                std::cout << " [CNN]";
+            }
+            std::cout << "\n";
         }
     }
     
