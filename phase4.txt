@@ -1,0 +1,57 @@
+Đã triển khai Layer 4 CNN Integration
+1. WaveletTransform Module (
+WaveletTransform.hpp
+ + 
+WaveletTransform.cpp
+)
+Continuous Wavelet Transform (CWT) với Morlet wavelet
+Tạo spectrogram 224x224 cho CNN input
+Hỗ trợ nhiều phương pháp normalize: Log-scale, Power-to-dB, Z-score, Min-Max
+Bilinear interpolation resize
+Format conversion NCHW/NHWC cho neural networks
+OpenMP parallel processing support
+2. CnnInference Module (
+CnnInference.hpp
+ + 
+CnnInference.cpp
+)
+ONNX Runtime C++ API (conditional compilation)
+Simulation mode khi chưa có trained model
+PIMPL pattern để hide implementation details
+Custom callback interface cho Vitis-AI DPU integration
+Batch inference support
+Softmax postprocessing
+3. CascadedController Updates (
+CascadedLogic.h
+ + 
+CascadedLogic.cpp
+)
+Điều chỉnh ngưỡng tin cậy để giảm over-exit:
+Layer 1: 0.75 → 0.90
+Layer 2: 0.70 → 0.88
+Layer 3: 0.65 → 0.85
+Logic early-exit mới (stricter):
+Phải có consensus (≥4/7 clusters)
+VÀ aggregated confidence vượt ngưỡng
+VÀ ít nhất 1 cluster có confidence > 0.85
+Thêm 
+processLayer4()
+ để xử lý mẫu ambiguous với CNN
+4. main.cpp Updates
+Enable CNN fallback
+Hiển thị thống kê exit layer
+Check Layer 4 fallback rate target (20-30%)
+🔧 Để build và test project:
+Đảm bảo CMake và compiler đã được cài đặt
+Chạy lệnh build:
+bash
+mkdir build && cd build
+cmake .. -G "MinGW Makefiles"
+mingw32-make
+Chạy test:
+bash
+./respiratory_analysis --classify
+📋 Next Steps:
+Train MobileNetV2 model với ICBHI dataset và export sang ONNX
+Test với actual model thay vì simulation mode
+Port sang Vitis-AI cho Ultra96-V2 FPGA deployment

@@ -33,6 +33,11 @@
 #include <map>
 #include <functional>
 
+// Define M_PI if not available (Windows/MinGW compatibility)
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 namespace respiratory {
 
 // ============================================================================

@@ -30,6 +30,10 @@
 #include <cstdint>
 #include <map>
 
+// Forward declarations for Layer 4
+#include "WaveletTransform.hpp"
+#include "CnnInference.hpp"
+
 namespace respiratory {
 
 // ============================================================================
@@ -63,8 +67,16 @@ constexpr int DEFAULT_TREES_PER_CLUSTER = 10;
 /// Độ sâu tối đa của cây quyết định
 constexpr int MAX_TREE_DEPTH = 10;
 
-/// Ngưỡng tin cậy mặc định cho early-exit
-constexpr float DEFAULT_CONFIDENCE_THRESHOLD = 0.7f;
+/// Ngưỡng tin cậy mặc định cho early-exit (tăng lên để giảm over-exit)
+constexpr float DEFAULT_CONFIDENCE_THRESHOLD = 0.85f;
+
+/// Ngưỡng tin cậy cho từng layer (thắt chặt hơn)
+constexpr float LAYER1_CONFIDENCE_THRESHOLD = 0.90f;  ///< Layer 1: Rất cao để tránh over-exit
+constexpr float LAYER2_CONFIDENCE_THRESHOLD = 0.88f;  ///< Layer 2: Cao
+constexpr float LAYER3_CONFIDENCE_THRESHOLD = 0.85f;  ///< Layer 3: Trung bình-cao
+
+/// Tỉ lệ fallback mong muốn cho Layer 4 (20-30%)
+constexpr float TARGET_LAYER4_FALLBACK_RATE = 0.25f;
 
 // ============================================================================
 // ENUMS
@@ -708,9 +720,15 @@ private:
     /// Ngưỡng tin cậy cho từng layer
     std::array<float, NUM_CASCADE_LAYERS> m_confidenceThresholds;
     
-    /// CNN callback (optional)
+    /// CNN callback (optional - for external CNN)
     CNNCallback m_cnnCallback;
     bool m_enableCNN;
+    
+    /// Layer 4: CNN Inference module
+    std::unique_ptr<CnnInference> m_cnnInference;
+    
+    /// Wavelet Transform for spectrogram generation
+    std::unique_ptr<WaveletTransform> m_waveletTransform;
     
     /// Thống kê
     mutable ExitStatistics m_stats;
@@ -744,6 +762,17 @@ private:
      * @brief Kiểm tra điều kiện early-exit
      */
     bool checkEarlyExit(const LayerResult& result, CascadeLayer layer) const;
+    
+    /**
+     * @brief Xử lý Layer 4 - CNN Deep Pattern Recognition
+     * 
+     * Xử lý các mẫu ambiguous không thể phân loại bởi RF layers.
+     * 1. Tạo Wavelet spectrogram từ tín hiệu (nếu có)
+     * 2. Chạy CNN inference
+     * 3. Trả về kết quả cuối cùng
+     */
+    PredictionResult processLayer4(const FeatureVector& features,
+                                     const std::vector<float>& rawSignal = {});
     
     /**
      * @brief Gọi CNN fallback (nếu có)
