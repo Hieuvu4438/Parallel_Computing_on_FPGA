@@ -64,7 +64,8 @@ IMG_SIZE = 224
 TARGET_SR = 4000
 WAVELET_NAME = 'morl'  # Morlet wavelet
 NUM_SCALES = 128
-FREQUENCY_RANGE = (50, 2000)
+# Focus on COPD/wheeze frequency band (50–1500 Hz)
+FREQUENCY_RANGE = (50, 1500)
 
 # Binary classification: COPD (1) vs Non-COPD (0)
 NUM_CLASSES = 2
@@ -73,35 +74,31 @@ CLASS_NAMES = ['Non-COPD', 'COPD']
 # ICBHI Patient Diagnosis Mapping (based on official dataset)
 # Source: ICBHI 2017 Challenge demographic file
 PATIENT_DIAGNOSIS = {
-    # COPD patients (Class 1)
-    101: 'COPD', 102: 'COPD', 103: 'COPD', 104: 'COPD', 105: 'COPD',
-    106: 'COPD', 107: 'COPD', 108: 'COPD', 109: 'COPD', 110: 'COPD',
-    111: 'COPD', 112: 'COPD', 113: 'COPD', 114: 'COPD', 115: 'COPD',
-    116: 'COPD', 117: 'COPD', 118: 'COPD', 119: 'COPD', 120: 'COPD',
-    121: 'COPD', 122: 'COPD', 123: 'COPD', 124: 'COPD', 125: 'COPD',
-    126: 'COPD', 127: 'COPD', 128: 'COPD', 129: 'COPD', 130: 'COPD',
-    131: 'COPD', 132: 'COPD', 133: 'COPD', 134: 'COPD', 135: 'COPD',
-    136: 'COPD', 137: 'COPD', 138: 'COPD', 139: 'COPD', 140: 'COPD',
-    141: 'COPD', 142: 'COPD', 143: 'COPD', 144: 'COPD', 145: 'COPD',
-    146: 'COPD', 147: 'COPD', 148: 'COPD', 149: 'COPD', 150: 'COPD',
-    151: 'COPD', 152: 'COPD', 153: 'COPD', 154: 'COPD', 155: 'COPD',
-    156: 'COPD', 157: 'COPD', 158: 'COPD', 159: 'COPD', 160: 'COPD',
-    161: 'COPD', 162: 'COPD', 163: 'COPD', 164: 'COPD', 165: 'COPD',
-    166: 'COPD', 167: 'COPD', 168: 'COPD', 169: 'COPD', 170: 'COPD',
-    171: 'COPD', 172: 'COPD', 173: 'COPD', 174: 'COPD', 175: 'COPD',
-    176: 'COPD', 177: 'COPD', 178: 'COPD', 179: 'COPD', 180: 'COPD',
-    181: 'COPD', 182: 'COPD', 183: 'COPD', 184: 'COPD', 185: 'COPD',
-    186: 'COPD', 187: 'COPD', 188: 'COPD', 189: 'COPD', 190: 'COPD',
-    # Non-COPD patients (Class 0) - Healthy, URTI, Pneumonia, Bronchiectasis
-    191: 'Healthy', 192: 'Healthy', 193: 'Healthy', 194: 'Healthy',
-    195: 'Pneumonia', 196: 'Pneumonia', 197: 'URTI', 198: 'URTI',
-    199: 'Bronchiectasis', 200: 'Bronchiectasis', 201: 'Healthy',
-    202: 'Pneumonia', 203: 'URTI', 204: 'Bronchiectasis', 205: 'Healthy',
-    206: 'Pneumonia', 207: 'URTI', 208: 'Healthy', 209: 'Healthy',
-    210: 'Pneumonia', 211: 'URTI', 212: 'Bronchiectasis', 213: 'Healthy',
-    214: 'Pneumonia', 215: 'Healthy', 216: 'URTI', 217: 'Healthy',
-    218: 'Pneumonia', 219: 'Bronchiectasis', 220: 'Healthy', 221: 'URTI',
-    222: 'Pneumonia', 223: 'Healthy', 224: 'Healthy', 225: 'Healthy',
+    101: 'URTI', 102: 'Healthy', 103: 'Asthma', 104: 'COPD', 105: 'URTI',
+    106: 'COPD', 107: 'COPD', 108: 'LRTI', 109: 'COPD', 110: 'COPD',
+    111: 'Bronchiectasis', 112: 'COPD', 113: 'COPD', 114: 'COPD', 115: 'LRTI',
+    116: 'Bronchiectasis', 117: 'COPD', 118: 'COPD', 119: 'URTI', 120: 'COPD',
+    121: 'Healthy', 122: 'Pneumonia', 123: 'Healthy', 124: 'COPD', 125: 'Healthy',
+    126: 'Healthy', 127: 'Healthy', 128: 'COPD', 129: 'URTI', 130: 'COPD',
+    131: 'URTI', 132: 'COPD', 133: 'COPD', 134: 'COPD', 135: 'Pneumonia',
+    136: 'Healthy', 137: 'URTI', 138: 'COPD', 139: 'COPD', 140: 'Pneumonia',
+    141: 'COPD', 142: 'COPD', 143: 'Healthy', 144: 'Healthy', 145: 'COPD',
+    146: 'COPD', 147: 'COPD', 148: 'URTI', 149: 'Bronchiolitis', 150: 'URTI',
+    151: 'COPD', 152: 'Healthy', 153: 'Healthy', 154: 'COPD', 155: 'COPD',
+    156: 'COPD', 157: 'COPD', 158: 'COPD', 159: 'Healthy', 160: 'COPD',
+    161: 'Bronchiolitis', 162: 'COPD', 163: 'COPD', 164: 'URTI', 165: 'URTI',
+    166: 'COPD', 167: 'Bronchiolitis', 168: 'Bronchiectasis', 169: 'Bronchiectasis',
+    170: 'COPD', 171: 'Healthy', 172: 'COPD', 173: 'Bronchiolitis', 174: 'COPD',
+    175: 'COPD', 176: 'COPD', 177: 'COPD', 178: 'COPD', 179: 'Healthy', 180: 'COPD',
+    181: 'COPD', 182: 'Healthy', 183: 'Healthy', 184: 'Healthy', 185: 'COPD',
+    186: 'COPD', 187: 'Healthy', 188: 'URTI', 189: 'COPD', 190: 'URTI',
+    191: 'Pneumonia', 192: 'COPD', 193: 'COPD', 194: 'Healthy', 195: 'COPD',
+    196: 'Bronchiectasis', 197: 'URTI', 198: 'COPD', 199: 'COPD', 200: 'COPD',
+    201: 'Bronchiectasis', 202: 'Healthy', 203: 'COPD', 204: 'COPD', 205: 'COPD',
+    206: 'Bronchiolitis', 207: 'COPD', 208: 'Healthy', 209: 'Healthy', 210: 'URTI',
+    211: 'COPD', 212: 'COPD', 213: 'COPD', 214: 'Healthy', 215: 'Bronchiectasis',
+    216: 'Bronchiolitis', 217: 'Healthy', 218: 'COPD', 219: 'Pneumonia', 220: 'COPD',
+    221: 'COPD', 222: 'COPD', 223: 'COPD', 224: 'Healthy', 225: 'Healthy',
     226: 'Pneumonia',
 }
 
@@ -483,10 +480,11 @@ def validate(model, dataloader, criterion, device):
 
 
 def compute_metrics(y_true, y_pred):
-    """Compute Accuracy, F1, Sensitivity, Specificity."""
+    """Compute Accuracy, Macro F1, Sensitivity (COPD), Specificity (Non-COPD), Precision."""
     metrics = {}
     metrics['accuracy'] = accuracy_score(y_true, y_pred)
     metrics['f1_macro'] = f1_score(y_true, y_pred, average='macro')
+    metrics['precision'] = precision_score(y_true, y_pred, average='macro', zero_division=0)
     
     cm = confusion_matrix(y_true, y_pred)
     
@@ -507,14 +505,80 @@ def compute_metrics(y_true, y_pred):
 
 
 def print_metrics(metrics):
+    """Print detailed metrics table (Accuracy, Macro F1, Sensitivity, Specificity, Precision)."""
     print("\n" + "="*60)
-    print("EVALUATION METRICS")
+    print("EVALUATION METRICS (Subject-Independent Test Set)")
     print("="*60)
-    print(f"Accuracy:    {metrics['accuracy']*100:.2f}%")
-    print(f"F1-Score:    {metrics['f1_macro']*100:.2f}%")
-    print(f"Sensitivity: {metrics['sensitivity']*100:.2f}% (COPD detection)")
-    print(f"Specificity: {metrics['specificity']*100:.2f}% (Non-COPD detection)")
+    print(f"  Accuracy:    {metrics['accuracy']*100:.2f}%")
+    print(f"  Macro F1:    {metrics['f1_macro']*100:.2f}%")
+    print(f"  Sensitivity: {metrics['sensitivity']*100:.2f}%  (COPD recall)")
+    print(f"  Specificity: {metrics['specificity']*100:.2f}%  (Non-COPD recall)")
+    print(f"  Precision:   {metrics['precision']*100:.2f}%  (macro)")
     print("="*60)
+
+
+def plot_training_history(history: Dict, save_path: str, confusion_matrix: Optional[np.ndarray] = None):
+    """Plot training history: Loss, Accuracy, F1-Score, and Confusion Matrix in one figure."""
+    n_plots = 4 if confusion_matrix is not None else 3
+    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+    axes = axes.flatten()
+    
+    epochs = range(1, len(history['train_loss']) + 1)
+    
+    # 1. Loss curve
+    ax = axes[0]
+    ax.plot(epochs, history['train_loss'], 'b-', label='Train Loss', linewidth=1.5)
+    ax.plot(epochs, history['val_loss'], 'r-', label='Val Loss', linewidth=1.5)
+    ax.set_xlabel('Epoch')
+    ax.set_ylabel('Loss')
+    ax.set_title('Loss Curve')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    
+    # 2. Accuracy curve
+    ax = axes[1]
+    ax.plot(epochs, history['train_acc'], 'b-', label='Train Acc', linewidth=1.5)
+    ax.plot(epochs, history['val_acc'], 'r-', label='Val Acc', linewidth=1.5)
+    ax.set_xlabel('Epoch')
+    ax.set_ylabel('Accuracy')
+    ax.set_title('Accuracy Curve')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    
+    # 3. F1-Score curve
+    ax = axes[2]
+    ax.plot(epochs, history['val_f1'], 'g-', label='Val Macro F1', linewidth=1.5)
+    ax.set_xlabel('Epoch')
+    ax.set_ylabel('Macro F1')
+    ax.set_title('F1-Score Curve')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    
+    # 4. Confusion Matrix
+    ax = axes[3]
+    if confusion_matrix is not None:
+        cm_norm = confusion_matrix.astype('float') / (confusion_matrix.sum(axis=1)[:, np.newaxis] + 1e-10)
+        im = ax.imshow(cm_norm, cmap='Blues', vmin=0, vmax=1)
+        ax.set_xticks([0, 1])
+        ax.set_yticks([0, 1])
+        ax.set_xticklabels(CLASS_NAMES)
+        ax.set_yticklabels(CLASS_NAMES)
+        for i in range(2):
+            for j in range(2):
+                ax.text(j, i, f'{confusion_matrix[i, j]}\n({cm_norm[i, j]:.1%})',
+                       ha='center', va='center', fontsize=11)
+        ax.set_ylabel('True Label')
+        ax.set_xlabel('Predicted Label')
+        ax.set_title('Confusion Matrix')
+        plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    else:
+        ax.axis('off')
+        ax.set_title('Confusion Matrix (N/A)')
+    
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"Training history plot saved to {save_path}")
 
 
 def plot_confusion_matrix(cm, save_path="confusion_matrix.png"):
@@ -667,10 +731,16 @@ def main(args):
         else:
             patience_counter += 1
     
-    # Phase 2: Unfreeze backbone
+    # Phase 2: Unfreeze backbone — reset early stopping so Phase 2 gets full chance
     model.unfreeze_backbone()
+    patience_counter = 0  # Reset so Phase 2 is not stopped by Phase 1 patience
+    phase2_min_epochs = 15  # Phase 2 must run at least 15 epochs before early stop
+    phase2_epochs = args.epochs - phase1_epochs
+    
     optimizer = optim.AdamW(model.parameters(), lr=1e-4, weight_decay=0.01)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=5)
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=phase2_epochs, eta_min=1e-6
+    )
     
     for epoch in range(phase1_epochs, args.epochs):
         print(f"\nPhase 2 - Epoch {epoch+1}/{args.epochs}")
@@ -686,7 +756,7 @@ def main(args):
         print(f"Train Loss: {train_loss:.4f}, Acc: {train_acc*100:.2f}%")
         print(f"Val Loss: {val_loss:.4f}, Acc: {val_acc*100:.2f}%, F1: {val_f1*100:.2f}%")
         
-        scheduler.step(val_f1)
+        scheduler.step()  # CosineAnnealing: step each epoch
         
         if val_f1 > best_val_f1:
             best_val_f1 = val_f1
@@ -694,30 +764,37 @@ def main(args):
             patience_counter = 0
         else:
             patience_counter += 1
-            if patience_counter >= patience:
-                print(f"\nEarly stopping at epoch {epoch+1}")
-                break
+        
+        # Early stop only after Phase 2 has run at least phase2_min_epochs
+        phase2_elapsed = (epoch + 1) - phase1_epochs
+        if phase2_elapsed >= phase2_min_epochs and patience_counter >= patience:
+            print(f"\nEarly stopping at epoch {epoch+1} (Phase 2 ran {phase2_elapsed} epochs)")
+            break
     
-    # 5. Evaluation
+    # 5. Evaluation (Subject-Independent Test Set)
     print("\n[5/5] Final Evaluation...")
-    model.load_state_dict(torch.load(output_dir / "best_model.pth"))
+    model.load_state_dict(torch.load(output_dir / "best_model.pth", map_location=DEVICE))
+    model.eval()
     
     _, _, _, test_preds, test_labels_arr = validate(model, test_loader, criterion, DEVICE)
     metrics = compute_metrics(test_labels_arr, test_preds)
     
     print_metrics(metrics)
-    plot_confusion_matrix(metrics['confusion_matrix'], output_dir / "confusion_matrix.png")
+    plot_training_history(history, str(output_dir / "training_results.png"),
+                          confusion_matrix=metrics['confusion_matrix'])
+    plot_confusion_matrix(metrics['confusion_matrix'], str(output_dir / "confusion_matrix.png"))
     
-    # Export ONNX
+    # Export ONNX (eval mode for C++/FPGA integration)
     export_to_onnx(model, str(output_dir / "copd_classifier.onnx"))
     
-    # Save metrics
+    # Save metrics (Accuracy, Macro F1, Sensitivity, Specificity, Precision)
     with open(output_dir / "metrics.json", 'w') as f:
         json.dump({
             'accuracy': float(metrics['accuracy']),
-            'f1_score': float(metrics['f1_macro']),
+            'f1_macro': float(metrics['f1_macro']),
             'sensitivity': float(metrics['sensitivity']),
-            'specificity': float(metrics['specificity'])
+            'specificity': float(metrics['specificity']),
+            'precision': float(metrics['precision'])
         }, f, indent=2)
     
     print(f"\nAll outputs saved to {output_dir}")
@@ -727,7 +804,7 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="COPD Binary Classification Training")
     parser.add_argument("--data_path", type=str, 
-                       default="d:/PROJECTS/Parallel_Computing_on_FPGA/data/ICBHI_final_database",
+                       default="/home/iec/Parallel_Computing_on_FPGA/data/samples/ICBHI_final_database",
                        help="Path to ICBHI database")
     parser.add_argument("--output_dir", type=str, default="./output_copd_binary",
                        help="Output directory")

@@ -1,50 +1,96 @@
-# Build directory
+# ==========================================================
+# C++ and CMake Build Files
+# ==========================================================
 build/
-
-# Data files (quá lớn để push)
-data/
-
-# Output files
-*.csv
+CMakeCache.txt
+CMakeFiles/
+Makefile
+*.cmake
+install/
+bin/
+lib/
 *.o
 *.a
-*.pth
-*.onnx
-*.png
-*.jpg
-*.jpeg
+*.so
+*.dylib
+*.out
+*.exe
 
-# Python
+# ==========================================================
+# Python & Environment
+# ==========================================================
 __pycache__/
 *.py[cod]
 *$py.class
-*.so
 .Python
 *.egg-info/
 dist/
+build-python/
 *.egg
-
-# Virtual environment
 venv/
 env/
 ENV/
 my_venv/
-.venv
+.venv/
+.env
 
-# Output directories
-output_*/
+# ==========================================================
+# Data, Models & Large Assets
+# ==========================================================
+data/
+datasets/
+*.csv
+*.zip
+*.tar.gz
+*.tar
+*.rar
+
+# Models
+*.pth
+*.pt
+*.onnx
+*.xmodel
+*.pb
+*.h5
+*.hdf5
+*.tflite
+*.safetensors
+
+# Images & Audio
+*.png
+*.jpg
+*.jpeg
+*.wav
+*.mp3
+!assets/
+
+# ==========================================================
+# Vitis AI & FPGA Workflow Outputs
+# ==========================================================
+Vitis-AI/
+compiled_model/
+quantize_result/
+deploy/
+vitis_ai_flow/quantize_result/
+.confirm
+
+# ==========================================================
+# Logs & Generated Text Outputs
+# ==========================================================
+*.log
+phase*.txt
+train.txt
 results/
+output_*/
 checkpoints/
 
-# IDE
+# ==========================================================
+# IDE & System Files
+# ==========================================================
 .vscode/
 .idea/
 *.swp
 *~
-
-# OS
+*.bak
 .DS_Store
 Thumbs.db
-
-# Logs
-*.log
