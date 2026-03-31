@@ -1448,7 +1448,7 @@ def main():
                         help='Exclude ICBHI dataset')
     parser.add_argument('--no_combined', action='store_true', default=False,
                         help='Exclude combined dataset')
-    parser.add_argument('--output_dir', type=str, default='./output_distillation_v2')
+    parser.add_argument('--output_dir', type=str, default='./output_distillation_v2_2')
     parser.add_argument('--n_folds', type=int, default=N_FOLDS)
     parser.add_argument('--batch_size', type=int, default=BATCH_SIZE)
     parser.add_argument('--num_workers', type=int, default=NUM_WORKERS)
