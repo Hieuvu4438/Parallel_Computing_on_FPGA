@@ -1,0 +1,22 @@
+\begin{table*}[h]
+\centering 
+{\fontsize{5.5pt}{6pt}\selectfont 
+\caption{Comparative Analysis of Machine Learning Methodologies Applied to Automated Respiratory Acoustic Pattern Recognition Systems}
+\renewcommand{\arraystretch}{1.8} % Tăng khoảng cách giữa các dòng
+\resizebox{\textwidth}{!}{ % Resize bảng cho vừa với chiều rộng của trang
+\begin{tabular}{|>{\centering\arraybackslash}m{1cm}|>{\centering\arraybackslash}m{1.3cm}|>{\centering\arraybackslash}m{1.3cm}|>{\centering\arraybackslash}m{1.5cm}|>{\centering\arraybackslash}m{1.8cm}|>{\centering\arraybackslash}m{1.8cm}|}
+\hline
+\textbf{Author} & \textbf{Dataset} & \textbf{Classified items} & \textbf{Feature extraction method} & \textbf{Classification method} & \textbf{Accuracy} \\ \hline
+\textbf{(Ariyanti et al., 2023) \cite{b07}} & ICBHI 2017 & Various lung sounds & STFT (Short-Time Fourier Transform) & Vision Transformer (AS-ViT) & 86.4\% (80:20 split), 79.1\% (60:40 split) \\ \hline
+\textbf{(Raju \& Ramesh, 2024) \cite{b08}} & Kaggle (COPD audio data) & Respiratory diseases & MFCC, Spectrograms & CNN & 93\% \\ \hline
+\textbf{(Wu et al., 2024) \cite{b09}} & ICBHI 2017 & Lung sounds (normal vs. abnormal) & STFT, Wavelet Transform & Bi-ResNet (Improved) & 77.81\% \\ \hline
+\textbf{(Edakkadan \& Srivastava, 2023) \cite{b10}} & HF Lung dataset & Normal, Rhonchi, Wheeze, Stridor, Crackles & Mel Spectrogram & CNN & 80.55\% \\ \hline
+\textbf{(Widyagustin et al., 2024) \cite{b11}} & Kaggle, ICBHI 2017 & 5 lung sound classes & Mel Spectrogram & YAMNet (Google's MobileNetV1) & 85.47\% (best), 76.67\% (cross-validation) \\ \hline
+\textbf{(Latifi et al., 2023) \cite{b12}} & ICBHI 2017 & 8 classes of lung sounds & MAGFB, MAMFB & Deep Convolutional Neural Network (DCNN) & 93\% (MAMFB), 90\% (MAGFB) \\ \hline
+\textbf{(Roy \& Satija, 2023) \cite{b13}} & BRACETS, KAUH datasets & ILD-affected lung sounds & Sinc Convolution-based feature extraction & Residual CNN (ILDNet) & 81.25\% \\ \hline
+\textbf{(Roy \& Satija, 2024) \cite{b14}} & ICBHI 2017 & 7-class, 6-class, and binary classification of diseases & Mel Spectrogram & Lightweight Inception Network (RDLINet) & 96.6\% (7-class), 99.6\% (6-class), 94.0\% (binary) \\ \hline
+\textbf{(K.V et al., 2024) \cite{b15}} & ICBHI 2017 & Lung sounds and diseases & Mel Spectrogram & Multi-task learning with MobileNet, ResNet, CNN, Densenet & 74\% (lung sound), 91\% (disease classification) \\ \hline
+\end{tabular}
+}
+\label{tab2}}
+\end{table*}
