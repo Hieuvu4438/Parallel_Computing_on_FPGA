@@ -1,0 +1,50 @@
+\documentclass[lettersize,journal]{IEEEtran}
+\input{preamble.tex}
+\begin{document}
+
+\title{Cascaded Framework with Hardware Acceleration for Respiratory Sound Analysis on Heterogeneous FPGA}
+
+\author{\IEEEauthorblockN{Kien Le Trung\IEEEauthorrefmark{1}, Huy~Bui Quoc\IEEEauthorrefmark{2}, Bac Dang Hoai\IEEEauthorrefmark{2} and~Hinh Nguyen Van\IEEEauthorrefmark{2}}% <-this % stops a space
+\\
+\IEEEauthorblockA{\IEEEauthorrefmark{1}VinUniversity, Hanoi 100000, Vietnam\\
+\IEEEauthorrefmark{2}Posts and Telecommunications Institute of Technology, Hanoi 100000, Vietnam\\
+}%
+\thanks{Corresponding author: Hinh Nguyen Van (e-mail: hinhnv@ptit.edu.vn).\protect\\}% <-this % stops a space
+\thanks{Manuscript received ... ..., 2025; revised ... ..., 2025.}}
+
+\maketitle
+
+\begin{abstract}
+This research focuses on designing a hierarchical embedded system that leverages respiratory sound features for diagnosing COPD and other respiratory disorders, aiming for high accuracy and energy efficiency suitable for mobile or embedded devices. The system segments lung sounds into individual breathing cycles and extracts key respiratory features across time and frequency domains, structured into four layers. It utilizes a combination of the Random Forest algorithm and an Artificial Neural Network, both of which are fine-tuned with the dataset for disease classification. The first layer handles record information, the second and third layers manage features extracted from fixed-length sound segments, classified using Random Forest, while the fourth layer converts breathing patterns into Spectrogram images using Wavelet Transform, which are then processed by the Artificial Neural Network for diagnosis. This design allows the system to classify without completing all four stages simultaneously, effectively utilizing the parallel computing power of the FPGA. Implemented on the Xilinx PYNQ-Ultra96-V2 FPGA development board, the system not only achieves a 98.81\% accuracy rate across five disease classes, Healthy, Pneumonia, URTI, Bronchiectasis, and COPD, but also reduces energy consumption by 52.5\% compared to traditional CPU-GPU methods. This study confirms the effectiveness of the proposed method in diagnosing respiratory disorders, highlighting its potential for real-world clinical applications.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Respiratory disease diagnosis, Respiratory sound, Signal transformation, FPGA, Parallel Computing.
+\end{IEEEkeywords}
+
+% ===== CÁC SECTION CHÍNH ĐÃ ĐƯỢC TÁCH =====
+\input{sections/01_introduction.tex}
+\input{sections/02_related_work.tex}
+\input{sections/03_methodology.tex}
+\input{sections/04_experiments.tex}
+\input{sections/05_conclusion.tex}
+% ==========================================
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\section{Biography Section}
+\begin{IEEEbiography}[{\includegraphics[width=1in,height=1.25in,clip,keepaspectratio]{avatar.jpg}}]{Kien Le Trung} received the B.E. in Electronics and Telecommunications from Hanoi University of Science and Technology, Vietnam in 2024. He is currently an AI Engineer at Vingroup Big Data Institute, VBDI, VietNam. His research interests include biomedical image processing, chip design, hardware acceleration and time series analysis.
+\end{IEEEbiography}
+
+\begin{IEEEbiography}[{\includegraphics[width=1in,height=1.25in,clip,keepaspectratio]{avt2.jpg}}]{Huy Bui Quoc} was born in Ha Noi, Vietnam in 2002. He is currently a fourth year student at the Posts and Telecommunications Institute of Technology (PTIT), Viet Nam. His reseach interests include computer vision, signal processing, image and video processing, video coding, efficient video compression and transmission techniques. He is also exploring advanced video codecs such as HEVC and VVC, along with video quality assessment methods like VMAF.
+\end{IEEEbiography}
+
+\begin{IEEEbiography}[{\includegraphics[width=1in,height=1.25in,clip,keepaspectratio]{avtMrBac.png}}]{Bac Dang Hoai} received the B.Sc. degree in Automation Engineering from Hanoi University of Technology and Science, Hanoi, Vietnam, and the M.Sc. degree in Electronics and Communications Engineering from Posts and Telecommunications Institute of Technology (PTIT), in 1997 and 2003, respectively. In 2008 he achieved the Phd. Degree in Electronics and  Communications Engineering from PTIT. Since 1998 he has been a lecturer at the Faculty of Electronics Engineering, involved in DSP and digital system design, channel coding. Since 2000 he has been vice dean of the faculty of Electronics Engineering in PTIT. His research interests include digital signal processing in communications, telecommunication transmission and NGN technologies, Satellite System.
+\end{IEEEbiography}
+
+\begin{IEEEbiography}[{\includegraphics[width=1in,height=1.25in,clip,keepaspectratio]{avt3.png}}]{Hinh Nguyen Van} received the B.E. and M.E. in Electronics and Telecommunications from Hanoi University of Science and Technology, Vietnam in 2021 and 2023, respectively. He is currently a M.E at Department of Science and Technology Management and International Cooperation, Posts and Telecommunications Institute of Technology, Vietnam. His research interests include deep learning, digital image processing, computer vision and also signal processing for wireless communications.
+\end{IEEEbiography}
+
+\vfill
+\end{document}

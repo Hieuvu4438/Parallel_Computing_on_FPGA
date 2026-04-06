@@ -1,0 +1,17 @@
+\begin{table*}[h]
+    \centering
+    \caption{Configuration of the Cascaded Early-Exit Framework}
+    \label{tab4}
+    \small
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabular}{@{}llp{8cm}@{}} % @{} để bỏ khoảng trắng thừa 2 bên
+        \toprule
+        \textbf{Stage} & \textbf{Input Feature} & \textbf{Function \& Exit Strategy} \\
+        \midrule
+        \textbf{Layer 1} & Statistical (Recording-level) & \textbf{Global Screening:} Filters out clear 'Healthy' cases based on patient metadata and global energy metrics. Early exit if confidence $> \tau_1$. \\
+        \textbf{Layer 2} & Statistical (Frame-level) & \textbf{Transient Detection:} Analyzes ZCR and Amplitude Distribution to identify potential crackles. Early exit if confidence $> \tau_2$. \\
+        \textbf{Layer 3} & MFCC Vectors & \textbf{Spectral Screening:} Uses Random Forests on MFCCs to detect spectral anomalies. Serves as the final gatekeeper before the CNN. \\
+        \textbf{Layer 4} & Wavelet Spectrogram & \textbf{Deep Analysis:} Computationally intensive CNN (MobileNetV2) activated only for high-uncertainty samples (approx. 20-30\% of total data). \\
+        \bottomrule
+    \end{tabular}
+\end{table*}

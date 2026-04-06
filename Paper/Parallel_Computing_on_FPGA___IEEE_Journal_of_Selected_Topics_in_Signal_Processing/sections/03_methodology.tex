@@ -1,0 +1,116 @@
+\section{Methodology}
+\label{sec:methodology}
+
+This study proposes a resource-efficient, cascaded diagnostic framework designed to address the inherent trade-off between computational complexity and classification accuracy in edge-based respiratory analysis. The methodology is structured into three primary stages: acoustic signal processing, cascaded inference logic, and hardware-aware implementation.
+
+\subsection{Dataset and Preprocessing}
+The system is evaluated using the ICBHI 2017 respiratory sound database \cite{b16}, the standard benchmark in this domain comprising 920 audio recordings (totaling 5.5 hours) and 6,898 annotated respiratory cycles. The dataset encompasses diverse pathologies including COPD, URTI, Bronchiectasis, and Pneumonia, alongside Healthy controls. As detailed in Table \ref{tab3}, the class distribution is highly imbalanced, necessitating robust feature discrimination strategies.
+
+Prior to feature extraction, raw audio signals undergo a preprocessing pipeline including resampling to 4kHz and band-pass filtering (50Hz - 2500Hz) to isolate pulmonary acoustic bands, effectively mitigating ambient noise and cardiac interference.
+
+\subsection{Feature Extraction Engineering}
+To capture the non-stationary nature of respiratory signals (e.g., transient crackles and continuous wheezes), we extract a hybrid feature set spanning time, frequency, and cepstral domains.
+
+\subsubsection{Time-Domain Features (Transient Analysis)}
+Time-domain features are computationally lightweight and effective for detecting high-energy transient anomalies such as crackles.
+
+\textit{1) Extreme Energy Difference (EED):} To quantify sudden energy bursts typical of discontinuous adventitious sounds, EED is computed as the divergence between maximal and minimal energy projections. Let $\mathbf{x} \in \mathbb{R}^N$ be the normalized signal vector of the current frame:
+\begin{equation}
+EED = \left| (w_{\max}^{T}\mathbf{x})^2 - (w_{\min}^{T}\mathbf{x})^2 \right|
+\end{equation}
+where $w_{\max}$ and $w_{\min}$ represent the spatial weight vectors corresponding to peak and trough energy states, respectively \cite{b18}.
+
+\textit{2) Zero Crossing Rate (ZCR):} ZCR serves as a proxy for the dominant frequency, useful for distinguishing high-pitched wheezes from normal breath sounds \cite{b20,b21}. It is defined as:
+\begin{equation}
+ZCR = \frac{1}{2(N-1)} \sum_{n=1}^{N-1} \left| \text{sgn}[x(n)] - \text{sgn}[x(n-1)] \right|
+\end{equation}
+where $N$ is the frame length and $\text{sgn}[\cdot]$ denotes the signum function.
+
+\textit{3) Root Mean Square Energy (RMSE):} Indicates the global intensity of the breathing cycle \cite{b19}:
+\begin{equation}
+RMSE = \sqrt{\frac{1}{N} \sum_{n=0}^{N-1} |x(n)|^2}
+\end{equation}
+
+Additional temporal features include \textit{Temporal Centroid (TC)} \cite{b23} and \textit{Log Attack Time} \cite{b24}, which characterize the temporal envelope of the sound event.
+
+\subsubsection{Frequency and Cepstral Features (Spectral Analysis)}
+For characterizing continuous adventitious sounds (wheezes, stridor) and complex textures, spectral analysis is essential.
+
+\textit{1) Spectral Centroid (SC):} Represents the "center of mass" of the spectrum, effectively differentiating between bronchial and vesicular breathing sounds \cite{b26}:
+\begin{equation}
+SC = \frac{\sum_{k=0}^{K-1} f(k) |X(k)|}{\sum_{k=0}^{K-1} |X(k)|}
+\end{equation}
+where $X(k)$ is the magnitude of the Discrete Fourier Transform (DFT) at frequency bin $k$.
+
+\textit{2) Mel-Frequency Cepstral Coefficients (MFCCs):} To emulate human auditory perception, MFCCs are extracted via a standard pipeline \cite{b28}: Pre-emphasis, Hamming windowing, DFT, Mel-filterbank integration, and Discrete Cosine Transform (DCT). 
+The mapping between physical frequency ($f$) and the Mel scale ($m$) is defined as:
+\begin{equation}
+m = 2595 \log_{10} \left( 1 + \frac{f}{700} \right)
+\end{equation}
+We extract a 39-dimensional feature vector per frame, consisting of 13 static coefficients (energy included) along with their first ($\Delta$) and second ($\Delta\Delta$) temporal derivatives to capture dynamic spectral evolution.
+
+\textit{3) Wavelet Transform:} A Discrete Wavelet Transform (DWT) \cite{b27} using the Morlet wavelet is applied to generate multi-resolution spectrograms. This provides the input image representation for the deep learning stage, overcoming the fixed time-frequency resolution limitation of standard Short-Time Fourier Transforms (STFT).
+
+\subsection{Cascaded Early-Exit Classification Framework}
+\label{subsec:architecture}
+Standard deep learning models impose a uniform computational cost on all samples, regardless of difficulty. We propose a \textit{Cascaded Early-Exit Framework} that formulates diagnosis as a sequential decision process to optimize the accuracy-efficiency trade-off.
+
+\subsubsection{Theoretical Formulation}
+The system is structured into $L=4$ layers. Let $x$ be an input sample and $C_i$ be the computational cost (latency/energy) of layer $i$. The system terminates at layer $i$ if the confidence score $S_i(x)$ exceeds a learnable threshold $\tau_i$. The total expected inference cost $\mathbb{E}[Cost]$ is defined as:
+\begin{equation}
+\mathbb{E}[Cost] = C_1 + \sum_{i=2}^{L} C_i \cdot P(\text{exit} \ge i)
+\end{equation}
+where $P(\text{exit} \ge i)$ denotes the probability of the sample propagating to layer $i$. By placing low-cost Random Forest classifiers ($C_{RF}$) in the initial layers ($i=1,2,3$) and the high-cost CNN ($C_{CNN}$) only in the final layer ($i=4$), and ensuring $C_{RF} \ll C_{CNN}$, we minimize the total system energy while maintaining high accuracy for difficult samples.
+
+\subsubsection{Hierarchical Architecture}
+The framework implementation details are presented in Table \ref{tab4} and visualized in Figure \ref{fig2}.
+
+\begin{itemize}
+    \item \textbf{Layers 1-3 (Statistical Screening via Random Forests):} These layers employ Random Forest (RF) ensembles to process the tabular features (Time/Frequency/MFCC vectors). RFs are selected for the initial stages due to their low latency and absence of complex floating-point matrix multiplications. Each layer consists of 7 parallel RF ensembles (Septuple Forest), comprising distinct decision trees (Table \ref{tab5}). A majority voting mechanism across these ensembles determines the early exit condition:
+    \begin{equation}
+    \text{Decision} = 
+    \begin{cases} 
+      \text{Class } c, & \text{if } \sum_{j=1}^{7} \mathbb{I}(O_j = c) \ge \lambda \\
+      \text{Next Layer}, & \text{otherwise}
+    \end{cases}
+    \end{equation}
+    where $O_j$ is the output of the $j$-th RF ensemble and $\lambda=4$ is the consensus threshold.
+    
+    \item \textbf{Layer 4 (Deep Pattern Recognition via CNN):} Samples with ambiguous statistical signatures (high uncertainty) propagate to the final layer. Here, Wavelet spectrograms are processed by lightweight Convolutional Neural Networks (CNNs). We implement MobileNetV2 \cite{b35} and ShuffleNetV1 \cite{b36} utilizing Depthwise Separable Convolutions to minimize parameters and FLOPs (Table \ref{tab6}).
+\end{itemize}
+
+\input{tables/table_4.tex}
+
+\input{tables/table_5.tex}
+
+\input{tables/table_6.tex}
+
+\begin{figure*}[t]
+    \centering
+    % Tên file gốc từ code cũ của bạn
+    \includegraphics[width=0.8\linewidth]{Architectural Configuration of the Septuple Forest Ensembles Within Each Processing Tier.png}
+    
+    \caption{\textbf{Micro-architecture of the Parallel Ensemble Voting Mechanism.} 
+    This diagram illustrates the internal decision logic within Layers 1-3. Seven independent Random Forest ensembles (Septuple Forest) operate concurrently to estimate the class probability. The \textit{Majority Voting} block acts as a high-speed hardware gatekeeper, calculating the confidence score to trigger an immediate 'Early Exit' (for high-confidence samples) or propagate the data to the next processing tier (for ambiguous samples).}
+    \label{fig2}
+\end{figure*}
+
+\begin{figure*}[t]
+    \centering
+    % Tên file gốc từ code cũ của bạn
+    \includegraphics[width=\textwidth]{System architecture with the Hyperparameters of Random Forest Layers.png}
+    
+    \caption{\textbf{Macroscopic Dataflow of the Uncertainty-Aware Cascaded Diagnostic Framework.} 
+    The pipeline consists of three phases: (1) Signal Preprocessing and Noise Reduction; (2) Hierarchical Feature Extraction; and (3) Sequential Inference. The system is designed to minimize the expected computational cost ($\mathbb{E}[Cost]$) by resolving easy classifications (Healthy/Clear COPD) in the initial Random Forest buffers (Layers 1-3) using lightweight statistical features, while reserving the computationally intensive Deep Learning stage (Layer 4) solely for complex cases exhibiting high spectral uncertainty.}
+    \label{fig3}
+\end{figure*}
+
+
+\subsection{Heterogeneous Hardware Implementation}
+The proposed architecture is synthesized on the Xilinx Zynq UltraScale+ MPSoC (Ultra96-V2) using a Hardware-Software Co-design approach to maximize throughput.
+
+\textit{1) Programmable Logic (PL) Acceleration:} The Random Forest ensembles are mapped directly to the FPGA fabric using custom HDL IP cores. The decision trees are unrolled to exploit fine-grained parallelism, allowing the evaluation of multiple trees within a single clock cycle, significantly reducing the latency of the first three layers.
+
+\textit{2) DPU Integration:} The CNN inference is accelerated using the Xilinx Deep Learning Processor Unit (DPU). The DPU is configured to execute tensor operations efficiently, utilizing the DSP48 slices for matrix multiplications and on-chip Block RAM (BRAM) for weight caching. 
+
+This heterogeneous mapping ensures that "easy" samples are processed almost instantaneously by the PL logic, while "hard" samples receive the full computational power of the DPU, realizing the theoretical energy savings of the cascaded model.
