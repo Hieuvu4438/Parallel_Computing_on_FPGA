@@ -1,0 +1,25 @@
+\begin{table}[h]
+    \centering
+    \caption{Hyperparameter Settings for Heterogeneous Classifiers}
+    \label{tab5}
+    \small
+    \begin{tabular}{lcc}
+        \toprule
+        \multicolumn{3}{c}{\textbf{Part A: Random Forest Layers (Layers 1-3)}} \\
+        \midrule
+        \textbf{Parameter} & \textbf{Value} & \textbf{Hardware Impact} \\
+        \midrule
+        Ensembles per Layer & 7 & Parallel Logic Cells \\
+        Trees per Ensemble & 8 & Pipeline Depth \\
+        Max Depth & 8 & BRAM Usage \\
+        \midrule
+        \multicolumn{3}{c}{\textbf{Part B: CNN Architecture (Layer 4)}} \\
+        \midrule
+        \textbf{Metric} & \textbf{MobileNetV2} & \textbf{ShuffleNetV1} \\
+        \midrule
+        Params (M) & 3.5 & 4.4 \\
+        FLOPs (M) & 300 & 140 \\
+        DPU Precision & INT8 & INT8 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
