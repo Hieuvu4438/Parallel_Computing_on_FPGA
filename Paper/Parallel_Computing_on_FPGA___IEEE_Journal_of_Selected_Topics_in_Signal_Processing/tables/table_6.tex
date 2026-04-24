@@ -1,7 +1,7 @@
 \begin{table}[h]
     \centering
     \caption{Hyperparameter Settings for Heterogeneous Classifiers}
-    \label{tab5}
+    \label{tab:hyperparams}
     \small
     \begin{tabular}{lcc}
         \toprule
@@ -15,11 +15,11 @@
         \midrule
         \multicolumn{3}{c}{\textbf{Part B: CNN Architecture (Layer 4)}} \\
         \midrule
-        \textbf{Metric} & \textbf{MobileNetV2} & \textbf{ShuffleNetV1} \\
+        \textbf{Metric} & \multicolumn{2}{c}{\textbf{MobileNetV2 (Student)}} \\
         \midrule
-        Params (M) & 3.5 & 4.4 \\
-        FLOPs (M) & 300 & 140 \\
-        DPU Precision & INT8 & INT8 \\
+        Params (M) & \multicolumn{2}{c}{~3.4} \\
+        FLOPs (M) & \multicolumn{2}{c}{300} \\
+        DPU Precision & \multicolumn{2}{c}{INT8 (QAT)} \\
         \bottomrule
     \end{tabular}
 \end{table}

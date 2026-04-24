@@ -33,6 +33,12 @@ ENV/
 my_venv/
 .venv/
 .env
+.ipynb_checkpoints/
+
+# ==========================================================
+# Jupyter Notebooks
+# ==========================================================
+notebook/
 
 # ==========================================================
 # Data, Models & Large Assets
@@ -63,16 +69,22 @@ datasets/
 *.wav
 *.mp3
 !assets/
+!Paper/
 
 # ==========================================================
 # Vitis AI & FPGA Workflow Outputs
 # ==========================================================
 Vitis-AI/
 compiled_model/
-quantize_result/
 deploy/
 vitis_ai_flow/quantize_result/
 .confirm
+
+# Ignore all quantization & optimization results
+quantize_*_result/
+quant_result_*/
+quantize_result/
+inspect_results/
 
 # ==========================================================
 # Logs & Generated Text Outputs
@@ -85,6 +97,32 @@ output_*/
 checkpoints/
 
 # ==========================================================
+# LaTeX Temporary & Build Files (for Paper/)
+# ==========================================================
+*.aux
+*.bbl
+*.blg
+*.brf
+*.idx
+*.ilg
+*.ind
+*.lof
+*.lot
+*.toc
+*.acn
+*.acr
+*.alg
+*.glg
+*.glo
+*.gls
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.pdfsync
+*.bcf
+*.run.xml
+
+# ==========================================================
 # IDE & System Files
 # ==========================================================
 .vscode/
@@ -94,3 +132,4 @@ checkpoints/
 *.bak
 .DS_Store
 Thumbs.db
+.tmp/

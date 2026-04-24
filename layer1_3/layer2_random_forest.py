@@ -84,7 +84,7 @@ RF_N_JOBS = -1               # Dùng tất cả CPU khi train
 RF_RANDOM_STATE = 42
 
 # --- Cascaded Threshold ---
-DEFAULT_THRESHOLD = 0.70     # Ngưỡng confidence mặc định
+DEFAULT_THRESHOLD = 0.4     # Ngưỡng confidence mặc định
 THRESHOLD_SWEEP_RANGE = np.arange(0.40, 0.96, 0.05)  # Dải quét ngưỡng
 
 # --- Cross-Validation ---

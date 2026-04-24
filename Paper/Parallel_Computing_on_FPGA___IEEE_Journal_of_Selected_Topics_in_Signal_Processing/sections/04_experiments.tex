@@ -22,10 +22,17 @@ Table \ref{tab:accuracy} summarizes the classification performance metrics. The 
 \input{tables/table_7.tex}
 
 \subsubsection{Early-Exit Efficiency}
-A critical contribution of this work is the ability to terminate inference early for "easy" samples. Figure \ref{fig:early_exit} (data not shown) demonstrates that approximately [XX]\% of Healthy samples and [XX]\% of clear COPD cases are resolved at Layers 1-3 (Random Forest stages), bypassing the computationally expensive CNN. This mechanism is the primary driver for the energy savings detailed in the subsequent section.
+A critical contribution of this work is the ability to terminate inference early for "easy" samples. Figure \ref{fig:early_exit} (data not shown) demonstrates that a significant portion of Healthy samples and clear COPD cases are resolved at Layers 1-3 (Random Forest stages), bypassing the computationally expensive CNN. This mechanism is the primary driver for the energy savings detailed in the subsequent section.
+
+\subsection{Quantization-Aware Training (QAT) Evaluation}
+Before FPGA deployment, the distilled MobileNetV2 was quantized from FP32 to INT8 using NVIDIA PyTorch-Quantization. Table \ref{tab:qat_results} demonstrates the QAT evaluation results on a test set of 198 ambiguous samples.
+
+\input{tables/table_qat.tex}
+
+The QAT process achieved a virtually lossless compression, sacrificing only $0.51\%$ in accuracy while reducing the CPU inference latency by $82.7\%$. The high SQNR (-4.37 dB) confirms that the Quantization-Aware Training effectively mitigated the quantization error, producing an INT8 model fully optimized for hardware deployment without undermining its diagnostic capability.
 
 \subsection{Cross-Platform Hardware Benchmarking}
-We benchmarked the proposed FPGA implementation against the NVIDIA Jetson Nano running the same MobileNetV2 backbone (optimized with TensorRT). Table \ref{tab:hardware_benchmark} presents the comparative results.
+We project the performance of the proposed FPGA implementation against the NVIDIA Jetson Nano running the same MobileNetV2 backbone (optimized with TensorRT). Table \ref{tab:hardware_benchmark} presents the comparative estimated results (pending physical deployment validation).
 
 \input{tables/table_8.tex}
 
