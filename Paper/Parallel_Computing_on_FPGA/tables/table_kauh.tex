@@ -1,0 +1,53 @@
+\begin{table*}[htbp]
+    \centering
+    \caption{Dataset Statistics of the King Abdullah University Hospital (KAUH) Database}
+    \label{tab:kauh_db}
+    \footnotesize
+    \setlength{\tabcolsep}{4pt}
+    \renewcommand{\arraystretch}{1.18}
+    \begin{tabularx}{\textwidth}{@{}p{3.0cm}p{2.0cm}p{2.4cm}p{1.7cm}X@{}}
+        \toprule
+        \multicolumn{5}{c}{\textbf{Panel A. General Database Specifications}} \\
+        \midrule
+        \textbf{Attribute} & \textbf{Value} & \multicolumn{3}{p{9.5cm}}{\textbf{Description}} \\
+        \midrule
+        Total subjects & 112 individuals & \multicolumn{3}{p{9.5cm}}{Middle Eastern demographic cohort} \\
+        Recording equipment & 3M Littmann 3200 & \multicolumn{3}{p{9.5cm}}{Electronic stethoscope} \\
+        Recording format & .wav and .zsa & \multicolumn{3}{p{9.5cm}}{Audio files and raw stethoscope files} \\
+        Duration & 5--30 s per record & \multicolumn{3}{p{9.5cm}}{Exported with three filter modes} \\
+        \midrule
+        \multicolumn{5}{c}{\textbf{Panel B. Pathology and Demographics Distribution}} \\
+        \midrule
+        \textbf{Health Status} & \textbf{Subjects} & \textbf{Age Range} & \textbf{Female} & \textbf{Male} \\
+        \midrule
+        Normal & 35 & 18--81 years & 11 & 24 \\
+        Asthma & 32 & 12--72 years & 17 & 15 \\
+        Heart Failure & 21 & 20--83 years & 9 & 12 \\
+        COPD & 9 & 42--76 years & 1 & 8 \\
+        Pneumonia & 5 & 36--70 years & 2 & 3 \\
+        Lung Fibrosis & 5 & 44--90 years & 2 & 3 \\
+        Bronchitis (BRON) & 3 & 20--68 years & 1 & 2 \\
+        Pleural Effusion & 2 & 70--81 years & 0 & 2 \\
+        \textit{Total} & \textit{112} & \textit{Avg. 50.5 years} & \textit{43} & \textit{69} \\
+        \midrule
+        \multicolumn{5}{c}{\textbf{Panel C. Auscultation Chest Zones}} \\
+        \midrule
+        \textbf{Chest Zone} & \textbf{Group} & \multicolumn{3}{p{9.5cm}}{\textbf{Distribution}} \\
+        \midrule
+        Posterior zones & Posterior & \multicolumn{3}{p{9.5cm}}{Right Lower (24), Left Lower (19), Right Middle (16), Right Upper (14), Left Middle (12), Left Upper (11)} \\
+        Anterior zones & Anterior & \multicolumn{3}{p{9.5cm}}{Right Upper (6), Right Middle (4), Right Lower (4), Left Upper (2)} \\
+        \midrule
+        \multicolumn{5}{c}{\textbf{Panel D. Filter Modes and Acoustic Properties}} \\
+        \midrule
+        \textbf{Filter Mode} & \textbf{Range} & \multicolumn{3}{p{9.5cm}}{\textbf{Primary Application}} \\
+        \midrule
+        Bell (B) & 20--1000 Hz & \multicolumn{3}{p{9.5cm}}{Emphasizes 20--200 Hz; suitable for low-frequency cardiac sounds} \\
+        Diaphragm (D) & 20--2000 Hz & \multicolumn{3}{p{9.5cm}}{Emphasizes 100--500 Hz; suitable for pulmonary auscultation} \\
+        Extended (E) & 20--1000 Hz & \multicolumn{3}{p{9.5cm}}{Emphasizes 50--500 Hz; broadened spectrum emphasis} \\
+        \midrule
+        \multicolumn{5}{c}{\textbf{Panel E. Annotated Sound Types}} \\
+        \midrule
+        Annotated sounds & All subjects & \multicolumn{3}{p{9.5cm}}{Wheezes (41), Normal (35), Crepitations (23), Crackles (8), Bronchial (1), mixed Wheezes and Crackles (2), mixed Bronchial and Crackles (2)} \\
+        \bottomrule
+    \end{tabularx}
+\end{table*}

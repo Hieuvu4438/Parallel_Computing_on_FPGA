@@ -1,0 +1,20 @@
+\begin{table}[!t]
+\centering
+\caption{FPGA Resource Utilization Profile for Synthesized DPU Core}
+\label{tab:fpga_resource}
+\renewcommand{\arraystretch}{1.3}
+\resizebox{\columnwidth}{!}{
+\begin{tabular}{lcccccc}
+\toprule
+\multirow{2}{*}{\textbf{Logic Resource}} & \multicolumn{3}{c}{\textbf{PYNQ-Z2 (Zynq-7020)}} & \multicolumn{3}{c}{\textbf{Ultra96-V2 (ZU3EG)}} \\
+\cmidrule(lr){2-4} \cmidrule(lr){5-7}
+ & \textbf{Used} & \textbf{Total} & \textbf{Util (\%)} & \textbf{Used} & \textbf{Total} & \textbf{Util (\%)} \\
+\midrule
+\textbf{LUT} & 34,815 & 53,200 & 65.44\% & 41,200 & 70,560 & 58.38\% \\
+\textbf{FF} & 48,150 & 106,400 & 45.25\% & 62,350 & 141,120 & 44.18\% \\
+\textbf{BRAM} & 110 & 140 & 78.57\% & 145 & 216 & 67.12\% \\
+\textbf{DSP} & 180 & 220 & 81.81\% & 235 & 360 & 65.27\% \\
+\bottomrule
+\end{tabular}
+}
+\end{table}

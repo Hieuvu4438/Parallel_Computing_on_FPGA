@@ -1,0 +1,18 @@
+\begin{table}[!t]
+\centering
+\caption{Quantization-Aware Training (QAT) Evaluation on MobileNetV2}
+\label{tab:qat_results}
+\renewcommand{\arraystretch}{1.3}
+\resizebox{\columnwidth}{!}{
+\begin{tabular}{lcc}
+\toprule
+\textbf{Metric} & \textbf{FP32 Baseline} & \textbf{INT8 (QAT)} \\
+\midrule
+Accuracy        & 97.98\% & 97.47\% \\
+F1 Macro        & 97.97\% & 97.47\% \\
+Avg Latency (CPU) & 177.9 ms & 30.8 ms \\
+% Model Size      & 11.63 MB & 11.70 MB \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
