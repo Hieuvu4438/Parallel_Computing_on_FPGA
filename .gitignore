@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Build directory
 build/
 
@@ -25,10 +26,42 @@ dist/
 *.egg
 
 # Virtual environment
+=======
+# ==========================================================
+# C++ and CMake Build Files
+# ==========================================================
+build/
+CMakeCache.txt
+CMakeFiles/
+Makefile
+*.cmake
+install/
+bin/
+lib/
+*.o
+*.a
+*.so
+*.dylib
+*.out
+*.exe
+
+# ==========================================================
+# Python & Environment
+# ==========================================================
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.egg-info/
+dist/
+build-python/
+*.egg
+>>>>>>> latex
 venv/
 env/
 ENV/
 my_venv/
+<<<<<<< HEAD
 .venv
 
 # Output directories
@@ -37,10 +70,107 @@ results/
 checkpoints/
 
 # IDE
+=======
+.venv/
+.env
+.ipynb_checkpoints/
+
+# ==========================================================
+# Jupyter Notebooks
+# ==========================================================
+notebook/
+
+# ==========================================================
+# Data, Models & Large Assets
+# ==========================================================
+data/
+datasets/
+*.csv
+*.zip
+*.tar.gz
+*.tar
+*.rar
+
+# Models
+*.pth
+*.pt
+*.onnx
+*.xmodel
+*.pb
+*.h5
+*.hdf5
+*.tflite
+*.safetensors
+
+# Images & Audio
+*.png
+*.jpg
+*.jpeg
+*.wav
+*.mp3
+!assets/
+!Paper/
+
+# ==========================================================
+# Vitis AI & FPGA Workflow Outputs
+# ==========================================================
+Vitis-AI/
+compiled_model/
+deploy/
+vitis_ai_flow/quantize_result/
+.confirm
+
+# Ignore all quantization & optimization results
+quantize_*_result/
+quant_result_*/
+quantize_result/
+inspect_results/
+
+# ==========================================================
+# Logs & Generated Text Outputs
+# ==========================================================
+*.log
+phase*.txt
+train.txt
+results/
+output_*/
+checkpoints/
+
+# ==========================================================
+# LaTeX Temporary & Build Files (for Paper/)
+# ==========================================================
+*.aux
+*.bbl
+*.blg
+*.brf
+*.idx
+*.ilg
+*.ind
+*.lof
+*.lot
+*.toc
+*.acn
+*.acr
+*.alg
+*.glg
+*.glo
+*.gls
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.pdfsync
+*.bcf
+*.run.xml
+
+# ==========================================================
+# IDE & System Files
+# ==========================================================
+>>>>>>> latex
 .vscode/
 .idea/
 *.swp
 *~
+<<<<<<< HEAD
 
 # OS
 .DS_Store
@@ -48,3 +178,9 @@ Thumbs.db
 
 # Logs
 *.log
+=======
+*.bak
+.DS_Store
+Thumbs.db
+.tmp/
+>>>>>>> latex
