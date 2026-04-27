@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python *)",
+      "Bash(pdflatex -interaction=nonstopmode main.tex)",
+      "Bash(command -v pdflatex)",
+      "Bash(command -v xelatex)",
+      "Bash(command -v latexmk)",
+      "Bash(command -v tectonic)"
+    ]
+  }
+}

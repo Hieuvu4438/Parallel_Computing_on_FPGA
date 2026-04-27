@@ -33,3 +33,4 @@ tests/test_signal_prep.cpp	Thêm 5 unit tests cho features
 File features.csv chứa:
 patient_id, label, duration, EED, ZCR_mean, ZCR_std, RMSE_mean, RMSE_std,MFCC0_mean...MFCC12_mean, MFCC0_std...MFCC12_std,Delta0_mean...Delta12_mean, Delta0_std...Delta12_std,Delta2_0_mean...Delta2_12_mean, Delta2_0_std...Delta2_12_std
 Sẵn sàng cho Phase 3: Random Forest / CNN Classification!
+

@@ -10,9 +10,10 @@ Raju and Ramesh \cite{b08} introduced a deep learning framework optimized for re
 Wu \textit{et al.} \cite{b09} developed an improved Bi-ResNet model for lung sound classification. The model integrates STFT and wavelet transform features, enhancing feature extraction efficiency. By incorporating skip connections and direct feature integration, the model achieves a more stable gradient flow, reducing vanishing gradient issues. Experimental results on the ICBHI 2017 dataset demonstrated a classification accuracy of 77.81\%, a 25.02\% improvement over previous Bi-ResNet implementations.
 
 Edakkadan and Srivastava \cite{b10} proposed a portable respiratory sound classification system using CNNs. Their method converts lung sounds into Mel spectrograms and classifies them using a lightweight CNN architecture. By implementing the system on a Raspberry Pi, the authors demonstrated its feasibility for real-time classification in mobile healthcare applications. The model achieved an accuracy of 80.55\% on the HF Lung dataset, with a sensitivity of 95.65\% and specificity of 98.80\%.
+The overall block diagram of the proposed system is presented in Fig.~\ref{fig1}.
 \begin{figure*}[htbp]
 \centering
-\includegraphics[width=\textwidth]{figures/FIG 1 (123).png}
+\includegraphics[width=\textwidth]{fig_system_overview.png}
 \caption{Overview diagram of the proposed system}
 \label{fig1}
 \end{figure*}
@@ -27,10 +28,8 @@ Roy and Satija \cite{b13} developed RDLINet, a lightweight inception network des
 
 Subsequently, Roy and Satija \cite{b14} proposed ILDNet, a deep learning framework for interstitial lung disease (ILD) identification. The model employs sinc convolution-based residual networks to extract complex respiratory sound features. Validated on BRACETS and KAUH datasets, the experimental results showed an accuracy of 81.25\%. The study emphasizes the importance of using advanced convolutional architectures for the early detection of ILD.
 
-\input{tables/table_3.tex}
-
 K.V \textit{et al.} \cite{b15} introduced a multi-task learning (MTL) approach for the simultaneous classification of lung sounds and diseases. Their model integrates CNN, ResNet50, MobileNet, and DenseNet architectures, achieving 74\% accuracy for lung sound classification and 91\% for disease classification. Additionally, the authors implemented a risk level computation for COPD using demographic data, where the Random Forest classifier achieved the highest accuracy of 92\%. This work underscores the potential of MTL in improving diagnostic precision and clinical decision-making.
 
 However, it is worth noting that most studies focus on maximizing the accuracy of classification results without fully exploiting the parallel computing power and flexibility of FPGAs in medical data processing, particularly in respiratory disease diagnosis. 
 Auscultation of pulmonary sounds via stethoscope continues to be among the most essential and practical diagnostic approaches for identifying respiratory conditions in patients. Nevertheless, the acoustic patterns produced by the respiratory system exhibit considerable complexity and unpredictability, presenting interpretive challenges even for healthcare professionals with specialized training.
-This creates a gap in applying the advantages of FPGA architecture to the medical field, where accurate and rapid diagnosis is crucial. The current state of affairs motivates the need for research and application of deep learning models on FPGAs to improve the diagnosis and management of respiratory diseases, mainly through lung sounds. The overall block diagram of the proposed system is presented in Fig.~\ref{fig1}.
+This creates a gap in applying the advantages of FPGA architecture to the medical field, where accurate and rapid diagnosis is crucial. The current state of affairs motivates the need for research and application of deep learning models on FPGAs to improve the diagnosis and management of respiratory diseases, mainly through lung sounds.
