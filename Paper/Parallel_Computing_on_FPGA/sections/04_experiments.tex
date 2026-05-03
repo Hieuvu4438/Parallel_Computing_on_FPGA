@@ -7,9 +7,9 @@ This section evaluates the proposed \textit{Uncertainty-Aware Heterogeneous Casc
 The experimental configuration was designed to assess both the algorithmic behavior of the cascaded classifier and the deployment characteristics of the FPGA-based implementation.
 
 \begin{itemize}
-    \item \textbf{Dataset Configuration and Model Topologies:} The evaluation uses the combined ICBHI-2017 and King Abdullah University Hospital (KAUH) respiratory sound databases, forming a 1,256-recording corpus. The merged dataset increases variation in diagnosis, age distribution, recording device, and auscultation location compared with using the ICBHI benchmark alone. The target space contains three classes: COPD, Healthy, and Non-COPD. Layers 1--3 use Random Forest ensembles operating on RMS, ZCR, and MFCC descriptors, respectively, whereas Layer 4 uses the MobileNetV2 student network with Hybrid Spectrogram inputs.
+    \item \textbf{Dataset Configuration and Model Topologies:} The evaluation uses the combined ICBHI-2017 and King Abdullah University Hospital (KAUH) respiratory sound databases, forming a 1,256-recording corpus. Each record is indexed by filename, mapped class label, source database, and patient identifier before merging. Duplicate waveforms are removed by basename, and source-prefixed patient identifiers are used for group-wise splitting. The target space contains three classes: COPD, Healthy, and Non-COPD. Layers 1--3 use Random Forest ensembles operating on RMS, ZCR, and MFCC descriptors, respectively, whereas Layer 4 uses the MobileNetV2 student network with Hybrid Spectrogram inputs.
 
-    \item \textbf{Subject-Independent Splitting Protocol:} To reduce patient-level data leakage, all recordings associated with the same subject identifier were assigned to the same fold during cross-validation. This protocol prevents segments from the same patient from appearing in both training and validation partitions and provides a more conservative estimate of generalization to unseen subjects.
+    \item \textbf{Subject-Independent Splitting Protocol:} To reduce patient-level data leakage, all recordings associated with the same subject identifier were assigned to the same fold during cross-validation using a stratified group split when class balance permitted, with group-wise splitting as the fallback. This protocol prevents segments from the same patient from appearing in both training and validation partitions and provides a more conservative estimate of generalization to unseen subjects.
 
     \item \textbf{Hardware Topology:} Hardware profiling was performed on two Xilinx edge platforms:
     \begin{itemize}
@@ -27,14 +27,25 @@ Layer 4 uses a MobileNetV2 student model for spatial-spectral classification of 
 
 \subsection{Performance Evaluation}
 \subsubsection{Diagnostic Accuracy}
-Under subject-independent evaluation, the proposed UA-HCI framework achieved an accuracy of $96.56\%$ for the 3-class classification task. This result indicates that the cascaded early-exit structure can maintain competitive diagnostic performance while reserving the more expensive Layer-4 CNN inference path for uncertain samples. The result should be interpreted as an offline experimental benchmark on the merged ICBHI and KAUH datasets rather than as evidence of prospective clinical performance.
+Under subject-independent evaluation, the proposed UA-HCI framework achieved a best-fold accuracy of $96.56\%$ and a mean accuracy of $94.94\%$ for the 3-class classification task, as shown in Table~\ref{tab:accuracy}. This result indicates that the cascaded early-exit structure can maintain competitive diagnostic performance while reserving the more expensive Layer-4 CNN inference path for uncertain samples. The result should be interpreted as an offline experimental benchmark on the merged ICBHI and KAUH datasets rather than as evidence of prospective clinical performance.
+
+\input{tables/table_7.tex}
+
+\subsubsection{Quantization-Aware Training}
+Table~\ref{tab:qat_results} reports the FP32 and INT8 QAT results for the MobileNetV2 student. The INT8 model preserves the diagnostic performance of the FP32 baseline while reducing measured inference latency, supporting deployment of the Layer-4 CNN path on the DPU.
+
+\input{tables/table_qat.tex}
 
 \subsubsection{Hardware Acceleration Benchmark}
 To quantify the benefit of hardware acceleration for the computationally intensive CNN stage, the MobileNetV2 Layer-4 inference latency was measured on embedded ARM execution and DPU execution. Table~\ref{tab:perf_cpu_dpu} reports the latency comparison on PYNQ-Z2 and Ultra96-V2.
 
 \input{tables/table_perf_cpu_dpu.tex}
 
-As shown in Table~\ref{tab:perf_cpu_dpu}, DPU execution substantially reduces the latency of the MobileNetV2 stage compared with running the same network on the embedded ARM processors. This improvement is expected because Layer 4 is dominated by regular convolutional operations that map well to the spatial parallelism and INT8 arithmetic supported by the DPU. The measured latency values describe the CNN inference block and should therefore be distinguished from the complete end-to-end cascade latency, which also includes preprocessing, feature extraction, Random Forest routing, and data-transfer overheads.
+As shown in Table~\ref{tab:perf_cpu_dpu}, DPU execution substantially reduces the latency of the MobileNetV2 stage compared with running the same network on the embedded ARM processors. This improvement is expected because Layer 4 is dominated by regular convolutional operations that map well to the spatial parallelism and INT8 arithmetic supported by the DPU. The measured latency values describe the CNN inference block and should therefore be distinguished from the complete end-to-end cascade latency, which also includes preprocessing, feature extraction, Random Forest routing, spectrogram generation, and data-transfer overheads.
+
+Table~\ref{tab:e2e_latency} defines the required route-level latency measurements for the complete UA-HCI pipeline on Ultra96-V2 at batch size 1. These measurements should be reported separately for Layer-1, Layer-2, Layer-3, and Layer-4 routes because each route activates a different subset of preprocessing, RF screening, spectrogram generation, and DPU execution.
+
+\input{tables/table_e2e_latency.tex}
 
 \subsection{Resource Utilization and Power Analysis}
 \subsubsection{FPGA Fabric Utilization}
@@ -45,7 +56,9 @@ Table~\ref{tab:fpga_resource} summarizes the FPGA resource utilization of the sy
 The resource profile shows that DPU deployment is feasible on both evaluated platforms, with Ultra96-V2 providing greater remaining capacity than the lower-resource PYNQ-Z2 configuration. The relatively high DSP and BRAM utilization reflects the arithmetic and buffering requirements of CNN acceleration, motivating the proposed design choice of activating the DPU only for samples that cannot be confidently classified by the lightweight Random Forest cascade.
 
 \subsubsection{Cascaded Early-Exit Energy Efficiency}
-The energy benefit of UA-HCI comes from reducing the probability that a sample reaches Layer 4. When a sample satisfies the early-exit condition $S_i(x)\ge\tau_i$ in Layers 1--3, the system returns the class label from the Processing System without invoking the CNN/DPU path. Under the evaluated configuration, this routing strategy reduced expected energy consumption by $52.5\%$ compared with a static CNN-style deployment that sends every sample to the deep inference stage. This result supports the use of uncertainty-aware routing for edge deployment, where battery capacity and thermal constraints are important design factors.
+The energy benefit of UA-HCI comes from reducing the probability that a sample reaches Layer 4. When a sample satisfies the early-exit condition $S_i(x)\ge\tau_i$ in Layers 1--3, the system returns the class label from the Processing System without invoking the CNN/DPU path. The expected energy per sample should therefore be computed from the measured route probabilities and route-specific energy costs rather than from Layer-4 latency alone. Table~\ref{tab:energy_model} defines the measurement fields required to quantify this benefit against a static CNN-style deployment that sends every sample to the deep inference stage.
+
+\input{tables/table_energy_model.tex}
 
 \section{Discussion}
 \label{sec:discussion}
@@ -60,4 +73,4 @@ Combining the ICBHI and KAUH databases introduces variation in recording devices
 The cascaded structure provides a partial form of interpretability because Layers 1--3 rely on explicit acoustic descriptors, including RMS energy, ZCR, and MFCC statistics. These descriptors allow early decisions to be related to signal energy, transient behavior, and spectral structure. For the Layer-4 CNN path, visualization methods such as Grad-CAM may be useful for post-hoc inspection of spectrogram regions contributing to a prediction, but such analysis should be treated as supporting evidence only when generated and evaluated systematically.
 
 \textbf{CDSS Positioning:}
-Conventional auscultation can be affected by clinician experience, acoustic environment, and the subtlety of adventitious respiratory sounds. The proposed UA-HCI framework addresses this setting by providing an automated second-opinion signal on edge hardware, with the additional goal of reducing unnecessary deep inference through early exits. The reported $96.56\%$ accuracy and $52.5\%$ expected energy reduction suggest that the approach is promising for resource-constrained respiratory sound analysis. Nevertheless, clinical deployment would require broader validation, calibration under deployment-specific conditions, and assessment alongside standard clinical workflows.
+Conventional auscultation can be affected by clinician experience, acoustic environment, and the subtlety of adventitious respiratory sounds. The proposed UA-HCI framework addresses this setting by providing an automated second-opinion signal on edge hardware, with the additional goal of reducing unnecessary deep inference through early exits. The reported best-fold accuracy of $96.56\%$ and mean accuracy of $94.94\%$ suggest that the approach is promising for resource-constrained respiratory sound analysis, while final energy-reduction claims require the route-level measurements defined in Table~\ref{tab:energy_model}. Nevertheless, clinical deployment would require broader validation, calibration under deployment-specific conditions, and assessment alongside standard clinical workflows.

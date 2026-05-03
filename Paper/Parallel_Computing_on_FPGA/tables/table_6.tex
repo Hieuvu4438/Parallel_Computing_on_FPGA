@@ -21,10 +21,14 @@
         \midrule
         Student architecture & MobileNetV2 \\
         Teacher architecture & EfficientNet-B0 ensemble \\
+        Teacher ensemble size & 3 \\
         Input tensor & $3 \times 224 \times 224$ \\
         Output tensor & $3$ class probabilities \\
-        Parameters & $\sim$3.4M \\
-        FLOPs & $\sim$300M \\
+        Distillation temperature $T$ & 4 \\
+        Distillation weight $\alpha$ & 0.7 \\
+        Focal-loss parameter $\gamma$ & 2.0 \\
+        Mixup / label smoothing & 0.4 / 0.1 \\
+        Training batch size & 16 \\
         DPU precision & INT8 (QAT) \\
         \bottomrule
     \end{tabular}

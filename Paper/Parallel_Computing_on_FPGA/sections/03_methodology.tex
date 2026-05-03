@@ -16,7 +16,7 @@ The source-database characteristics are summarized in Tables~\ref{tab:icbhi_demo
 \input{tables/table_3.tex}
 \input{tables/table_kauh.tex}
 
-All recordings are mapped into a 3-class target space: COPD (820 samples, 65.3\%), Non-COPD (296 samples, 23.6\%), and Healthy (140 samples, 11.1\%). The Non-COPD class aggregates respiratory conditions such as Asthma, Heart Failure, Pulmonary Fibrosis, Pneumonia, and Pleural Effusion. The resulting class distribution is shown in Table~\ref{tab:class_dist}.
+The merged dataset is constructed with a patient-preserving protocol. Each waveform is stored with its filename, original diagnosis, mapped class label, source database, and patient identifier. ICBHI recordings use the subject code embedded in the filename, while KAUH recordings use the database-specific subject prefix. Duplicate entries are removed by waveform basename before merging, and all patient identifiers are converted to source-prefixed strings so that cross-validation can group recordings by subject. The diagnostic labels are mapped into a 3-class target space: COPD (820 samples, 65.3\%), Non-COPD (296 samples, 23.6\%), and Healthy (140 samples, 11.1\%). The Non-COPD class aggregates respiratory conditions such as Asthma, Heart Failure, Pulmonary Fibrosis, Pneumonia, Bronchiectasis, Bronchiolitis, LRTI, URTI, and Pleural Effusion. The resulting class distribution is shown in Table~\ref{tab:class_dist}.
 
 \input{tables/table_4.tex}
 
@@ -59,11 +59,11 @@ Layer 4 uses a MobileNetV2 student network to map $X_H$ to a 3-class probability
 \begin{equation}
     \mathbf{p}_4 = F_{\theta}(X_H), \qquad \mathbf{p}_4 \in \mathbb{R}^{3},
 \end{equation}
-where the three output dimensions correspond to COPD, Healthy, and Non-COPD. The student is trained with knowledge distillation from an EfficientNet-B0 teacher ensemble. The distillation objective combines hard-label supervision and soft teacher probabilities:
+where the three output dimensions correspond to COPD, Healthy, and Non-COPD. The student is trained with knowledge distillation from a three-model EfficientNet-B0 teacher ensemble initialized from ImageNet weights. Teacher training uses two stages with learning rates of $1\times10^{-3}$ and $1\times10^{-5}$ for 40 and 20 epochs, respectively. Student training uses supervised pretraining followed by distillation fine-tuning with learning rates of $3\times10^{-4}$ and $1\times10^{-5}$ for 50 and 25 epochs, respectively. The distillation objective combines hard-label supervision and soft teacher probabilities:
 \begin{equation}
 \mathcal{L}=(1-\alpha)\mathcal{L}_{\mathrm{focal}}(y,\mathbf{p}_s)+\alpha T^2\mathrm{KL}\left(\sigma(\mathbf{z}_t/T)\,\|\,\sigma(\mathbf{z}_s/T)\right),
 \end{equation}
-where $T=4$ is the distillation temperature, $\alpha=0.7$ controls the weight of the distillation term, and $\mathcal{L}_{\mathrm{focal}}$ mitigates class imbalance.
+where $T=4$ is the distillation temperature, $\alpha=0.7$ controls the weight of the distillation term, and $\mathcal{L}_{\mathrm{focal}}$ uses $\gamma=2$ to mitigate class imbalance. Training also applies label smoothing of 0.1, Mixup with $\alpha=0.4$, batch size 16, weight decay 0.01, gradient clipping at 1.0, and early stopping with patience 15.
 
 \subsection{Cascaded Early-Exit Classification}
 \label{subsec:architecture}
