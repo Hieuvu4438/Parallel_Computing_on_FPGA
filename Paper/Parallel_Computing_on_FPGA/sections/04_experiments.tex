@@ -27,7 +27,9 @@ Layer 4 uses a MobileNetV2 student model for spatial-spectral classification of 
 
 \subsection{Performance Evaluation}
 \subsubsection{Diagnostic Accuracy}
-Under subject-independent evaluation, the proposed UA-HCI framework achieved a best-fold accuracy of $96.56\%$ and a mean accuracy of $94.94\%$ for the 3-class classification task, as shown in Table~\ref{tab:accuracy}. This result indicates that the cascaded early-exit structure can maintain competitive diagnostic performance while reserving the more expensive Layer-4 CNN inference path for uncertain samples. The result should be interpreted as an offline experimental benchmark on the merged ICBHI and KAUH datasets rather than as evidence of prospective clinical performance.
+Under subject-independent evaluation, the proposed UA-HCI framework achieved a best-fold accuracy of $96.56\%$ and a mean accuracy of $94.94\%$ for the 3-class classification task, as shown in Table~\ref{tab:accuracy}. Table~\ref{tab:per_class_metrics} provides the detailed per-class classification metrics. 
+
+The results show that the framework is highly effective at identifying COPD, achieving an F1-score of $98.00 \pm 0.67\%$. The performance on Healthy ($85.80 \pm 10.30\%$) and Non-COPD ($86.17 \pm 3.06\%$) classes is lower but still competitive. Crucially, the system achieves a high specificity for Healthy ($98.92 \pm 0.81\%$) and Non-COPD ($97.30 \pm 1.90\%$) subjects, which is vital for community screening to minimize false positives and prevent unnecessary clinical anxiety. The near-perfect sensitivity for the COPD class ($98.45 \pm 0.82\%$) ensures that pathological samples are correctly identified and routed to the DPU for high-resolution analysis. Analysis of the confusion matrices indicates that most errors occur between the COPD and Non-COPD classes, suggesting that certain pathological features, such as wheezing, can overlap across different respiratory conditions. The use of Focal Loss and Mixup training partially mitigates the class imbalance and helps regularize the model against the dominant COPD category.
 
 \input{tables/table_7.tex}
 
@@ -49,7 +51,7 @@ Table~\ref{tab:e2e_latency} defines the required route-level latency measurement
 
 \subsection{Resource Utilization and Power Analysis}
 \subsubsection{FPGA Fabric Utilization}
-Table~\ref{tab:fpga_resource} summarizes the FPGA resource utilization of the synthesized DPU configuration on the two target platforms. The reported LUT, FF, BRAM, and DSP usage provides an estimate of the hardware cost associated with accelerating the Layer-4 MobileNetV2 stage.
+Table~\ref{tab:fpga_resource} summarizes the FPGA resource utilization of the synthesized DPU configuration on the two target platforms. For the Ultra96-V2 platform, we deployed the \textbf{DPUCZDX8G\_ISA1\_B2304} IP core, which is optimized for Zynq UltraScale+ MPSoC architectures. The DPU was configured with a target clock frequency of 300 MHz for the processing core and 600 MHz for the DSP slices, achieving timing closure using Xilinx Vivado 2022.2. The reported LUT, FF, BRAM, and DSP usage includes the DPU core, the PS-PL AXI interconnect, and the required control logic.
 
 \input{tables/table_resource_util.tex}
 

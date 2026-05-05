@@ -1,6 +1,6 @@
 \begin{table}[htbp]
 \centering
-\caption{Knowledge Distillation Performance - 3-Fold CV (Subject-Independent Split)}
+\caption{Knowledge distillation performance: three-fold cross-validation with subject-independent splits}
 \label{tab:accuracy}
 \renewcommand{\arraystretch}{1.3}
 \resizebox{\columnwidth}{!}{
@@ -12,7 +12,25 @@ Fold 0 & 96.56 & 94.57 & 96.46 \\
 Fold 1 & 94.25 & 86.32 & 94.32 \\
 Fold 2 & 94.02 & 89.09 & 93.94 \\
 \midrule
-\textbf{Mean} & \textbf{94.94} & \textbf{90.00} & \textbf{94.91} \\
+\textbf{Mean $\pm$ SD} & \textbf{94.94 $\pm$ 1.41} & \textbf{90.00 $\pm$ 4.21} & \textbf{94.91 $\pm$ 1.36} \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{Per-Class Classification Metrics (Mean $\pm$ SD across 3 Folds)}
+\label{tab:per_class_metrics}
+\renewcommand{\arraystretch}{1.3}
+\resizebox{\columnwidth}{!}{
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Class} & \textbf{Precision (\%)} & \textbf{Recall (\%)} & \textbf{Specificity (\%)} & \textbf{F1-Score (\%)} \\
+\midrule
+COPD     & 97.56 $\pm$ 1.59 & 98.45 $\pm$ 0.82 & 92.91 $\pm$ 4.67 & 98.00 $\pm$ 0.67 \\
+Healthy  & 87.30 $\pm$ 9.40 & 84.76 $\pm$ 13.50 & 98.92 $\pm$ 0.81 & 85.80 $\pm$ 10.30 \\
+Non-COPD & 87.78 $\pm$ 8.01 & 85.00 $\pm$ 2.87 & 97.30 $\pm$ 1.90 & 86.17 $\pm$ 3.06 \\
 \bottomrule
 \end{tabular}
 }

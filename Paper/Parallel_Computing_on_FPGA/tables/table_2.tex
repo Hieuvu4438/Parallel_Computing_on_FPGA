@@ -1,23 +1,25 @@
 \begin{table*}[!t]
 \centering
-\caption{Comparison of machine learning methods for respiratory sound classification}
+\caption{Comparison of machine learning methods for automated respiratory acoustic pattern recognition}
 \label{tab:ml_comparison}
 \footnotesize
 \setlength{\tabcolsep}{3pt}
 \renewcommand{\arraystretch}{1.12}
-\begin{tabularx}{\textwidth}{@{}p{2.4cm}p{2.0cm}p{2.3cm}p{2.7cm}p{2.8cm}X@{}}
+\begin{tabularx}{\textwidth}{@{}p{2.2cm}p{1.8cm}p{1.8cm}p{2.3cm}p{2.0cm}p{2.0cm}X@{}}
 \toprule
-\textbf{Study} & \textbf{Dataset} & \textbf{Task} & \textbf{Features} & \textbf{Model} & \textbf{Reported result} \\
+\textbf{Study} & \textbf{Dataset} & \textbf{Task} & \textbf{Features} & \textbf{Model} & \textbf{Evaluation} & \textbf{Reported result} \\
 \midrule
-Ariyanti \textit{et al.} \cite{b07} & ICBHI 2017 & Lung sound classes & STFT spectrogram & AS-ViT & 86.4\% accuracy (80:20 split); 79.1\% (60:40 split) \\
-Raju and Ramesh \cite{b08} & Kaggle COPD audio & Respiratory diseases & MFCCs, spectrograms & CNN & 93\% accuracy \\
-Wu \textit{et al.} \cite{b09} & ICBHI 2017 & Normal vs. abnormal & STFT, wavelet transform & Improved Bi-ResNet & 77.81\% accuracy \\
-Edakkadan and Srivastava \cite{b10} & HF Lung & Five lung sound classes & Mel spectrogram & Lightweight CNN & 80.55\% accuracy \\
-Widyagustin \textit{et al.} \cite{b11} & Kaggle, ICBHI 2017 & Five lung sound classes & Pre-trained audio embeddings & YAMNet & 85.47\% best accuracy; 76.67\% cross-validation \\
-Latifi \textit{et al.} \cite{b12} & ICBHI 2017 & Eight lung sound classes & MAGFB, MAMFB & DCNN & 93\% accuracy (MAMFB); 90\% (MAGFB) \\
-Roy and Satija \cite{b13} & ICBHI 2017 & Disease classification & Mel spectrogram & RDLINet & 96.6\% (7-class); 99.6\% (6-class); 94.0\% (binary) \\
-Roy and Satija \cite{b14} & BRACETS, KAUH & ILD identification & Sinc convolution features & ILDNet & 81.25\% accuracy \\
-K. V. \textit{et al.} \cite{b15} & ICBHI 2017 & Sound and disease classification & Mel spectrogram & Multi-task CNN/ResNet/MobileNet/DenseNet & 74\% lung sound; 91\% disease classification \\
+Ariyanti \textit{et al.} \cite{b07} & ICBHI 2017 & Lung sound classes & STFT spectrogram & AS-ViT & Random split & 86.4\% accuracy \\
+Raju and Ramesh \cite{b08} & Kaggle COPD & Respiratory diseases & MFCCs, spectrograms & CNN & Random split & 93\% accuracy \\
+Wu \textit{et al.} \cite{b09} & ICBHI 2017 & Normal vs. abnormal & STFT, wavelet transform & Bi-ResNet & Subject-indep. & 77.81\% accuracy \\
+Edakkadan \cite{b10} & HF Lung & Lung sound classes & Mel spectrogram & Lightweight CNN & Patient-indep. & 80.55\% accuracy \\
+Widyagustin \cite{b11} & ICBHI 2017 & Lung sound classes & Audio embeddings & YAMNet & Cross-validation & 85.47\% best acc. \\
+Latifi \textit{et al.} \cite{b12} & ICBHI 2017 & Lung sound classes & Entropy features & DCNN & Patient-indep. & 93\% accuracy \\
+Roy and Satija \cite{b13} & ICBHI 2017 & Disease classification & Mel spectrogram & RDLINet & Subject-indep. & 99.6\% (6-class) \\
+Roy and Satija \cite{b14} & KAUH & ILD identification & Sinc convolution & ILDNet & Subject-indep. & 81.25\% accuracy \\
+K. V. \textit{et al.} \cite{b15} & ICBHI 2017 & Sound/Disease & Mel spectrogram & Multi-task CNN & Random split & 91\% disease acc. \\
+\midrule
+\textbf{Proposed UA-HCI} & \textbf{Merged} & \textbf{3-class disease} & \textbf{hybrid spectrogram} & \textbf{Cascaded CNN} & \textbf{Subject-indep.} & \textbf{94.94\% (mean)} \\
 \bottomrule
 \end{tabularx}
 \end{table*}

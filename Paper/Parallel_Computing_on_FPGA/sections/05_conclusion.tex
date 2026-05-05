@@ -1,14 +1,8 @@
 \section{Conclusion}
 \label{sec:conclusion}
-This study presented UA-HCI, a heterogeneous cascaded framework for respiratory sound analysis that combines Random Forest early exits on the ARM Processing System with an INT8 QAT MobileNetV2 student on the Xilinx DPU. Under subject-independent 3-fold cross-validation for Healthy, COPD, and Non-COPD classification, the framework achieved a best-fold accuracy of 96.56\% and a mean accuracy of 94.94\%. The QAT evaluation showed a small accuracy change from 97.98\% to 97.47\% for the MobileNetV2 stage, while the hardware benchmark demonstrated lower Layer-4 inference latency on DPU execution than on embedded ARM execution.
+This study developed a hierarchical embedded system that uses respiratory sound features to diagnose respiratory diseases. The system was deployed on the Ultra96-V2 FPGA and achieved the expected accuracy and performance. With a mean accuracy of 94.94\% across three-fold cross-validation for three classes—Healthy, COPD, and Non-COPD—the model demonstrates the effectiveness of the proposed method for classifying respiratory conditions. The QAT evaluation showed a small accuracy change from 97.98\% to 97.47\% for the MobileNetV2 stage, while the hardware benchmark demonstrated lower Layer-4 inference latency on DPU execution than on embedded ARM execution.
 
-The results suggest that uncertainty-aware routing is a promising direction for respiratory sound analysis on resource-constrained FPGA platforms. Future work should complete the route-level latency and energy measurements defined in this paper, report calibrated early-exit thresholds, and validate the system on prospective clinical recordings before deployment in clinical decision-support workflows.
+The system uses FPGA parallelism to reduce disease-classification time. This advantage can reduce diagnostic processing time, supporting deployment on mobile or embedded devices and potential use in clinical settings. The results suggest that uncertainty-aware routing is a promising direction for respiratory sound analysis on resource-constrained FPGA platforms. Future work should complete the route-level latency and energy measurements defined in this paper, report calibrated early-exit thresholds, and validate the system on prospective clinical recordings, which may support clinical diagnostic workflows and improve patient care.
 
 \section*{Data Availability}
 The ICBHI 2017 Respiratory Sound Database and the King Abdullah University Hospital Database used in this study are publicly available.
-
-% use section* for acknowledgment
-\section*{Acknowledgment}
-% enable scriptsize
-%\scriptsize
-The authors are grateful to the editor and the anonymous referees for their valuable comments, which significantly improved the results and presentation of this article. The research is supported by Posts and Telecommunications Institute of Technology, Vietnam.
