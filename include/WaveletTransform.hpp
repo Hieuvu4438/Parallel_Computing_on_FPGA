@@ -26,6 +26,8 @@
 #include <memory>
 #include <string>
 
+#include "Common.h"
+
 namespace respiratory {
 
 // ============================================================================
@@ -41,8 +43,8 @@ constexpr int DEFAULT_NUM_SCALES = 64;
 /// Tần số trung tâm của Morlet wavelet (ω₀)
 constexpr float MORLET_CENTER_FREQUENCY = 6.0f;
 
-/// Sample rate mặc định (Hz)
-constexpr int WAVELET_SAMPLE_RATE = 4000;
+/// Sample rate mặc định (Hz) - lấy từ Common.h (SYSTEM_SAMPLE_RATE = 4000 Hz)
+constexpr int WAVELET_SAMPLE_RATE = static_cast<int>(SYSTEM_SAMPLE_RATE);
 
 // ============================================================================
 // ENUMS

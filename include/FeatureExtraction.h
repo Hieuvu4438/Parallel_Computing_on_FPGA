@@ -29,14 +29,16 @@
 #include <string>
 #include <complex>
 
+#include "Common.h"
+
 namespace respiratory {
 
 // ============================================================================
 // CONSTANTS - Thông số trích xuất đặc trưng theo bài báo IEEE
 // ============================================================================
 
-/// Tần số lấy mẫu (Hz) - phải khớp với SignalPrep
-constexpr float FEATURE_SAMPLE_RATE = 4000.0f;
+/// Tần số lấy mẫu (Hz) - lấy từ Common.h (SYSTEM_SAMPLE_RATE = 4000 Hz)
+constexpr float FEATURE_SAMPLE_RATE = SYSTEM_SAMPLE_RATE;
 
 /// Kích thước frame (ms) - 25ms theo bài báo
 constexpr float FRAME_SIZE_MS = 25.0f;

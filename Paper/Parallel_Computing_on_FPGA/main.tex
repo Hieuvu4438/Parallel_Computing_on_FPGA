@@ -2,6 +2,39 @@
 \input{preamble.tex}
 \begin{document}
 
+\begin{titlepage}
+\begin{tikzpicture}[remember picture, overlay]
+  \draw[line width = 2pt] ($(current page.north west) + (2cm,-2cm)$) rectangle ($(current page.south east) + (-2cm,2cm)$);
+  \draw[line width = 0.5pt] ($(current page.north west) + (2.1cm,-2.1cm)$) rectangle ($(current page.south east) + (-2.1cm,2.1cm)$);
+\end{tikzpicture}
+\begin{center}
+    \vspace*{0.5cm}
+    \Large \textbf{POSTS AND TELECOMMUNICATIONS INSTITUTE OF TECHNOLOGY}\\
+    \Large \textbf{FACULTY OF INFORMATION TECHNOLOGY 1}\\
+    \vspace{1.5cm}
+    
+    \includegraphics[width=0.4\textwidth]{logo.png}\\ % user will provide this
+    \vspace{1.5cm}
+    
+    \Large \textbf{Introduction to Artificial Intelligence Report}\\
+    \vspace{1cm}
+    \huge \textbf{Cascaded Framework with Hardware Acceleration\\
+    for Respiratory Sound Analysis on Heterogeneous\\
+    FPGA}\\
+    
+    \vspace{2cm}
+    \begin{flushleft}
+        \Large
+        \hspace{3.5cm} \textbf{Instructor: } Dr. Dang Hoang Long \\
+        \hspace{3.5cm} \textbf{Student: } Vu Dinh Hieu - B23DCCE036 \\
+        \hspace{3.5cm} \textbf{Course Year: } 2023-2028 \\
+    \end{flushleft}
+    
+    \vfill
+    \Large \textbf{Hanoi, 2026}
+\end{center}
+\end{titlepage}
+
 \title{Cascaded Framework with Hardware Acceleration for Respiratory Sound Analysis on Heterogeneous FPGA}
 
 \author{\IEEEauthorblockN{Kien Le Trung\IEEEauthorrefmark{1}, Huy~Bui Quoc\IEEEauthorrefmark{2}, Bac Dang Hoai\IEEEauthorrefmark{2} and~Hinh Nguyen Van\IEEEauthorrefmark{2}}% <-this % stops a space

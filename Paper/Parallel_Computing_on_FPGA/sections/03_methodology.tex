@@ -111,7 +111,7 @@ Fig.~\ref{fig2} illustrates the septuple Random Forest voting mechanism used to 
 Fig.~\ref{fig3} summarizes the end-to-end UA-HCI dataflow from acoustic preprocessing to RF-based early exits and Layer-4 DPU inference.
 \begin{figure*}[htbp]
     \centering
-    \includegraphics[width=\textwidth]{figures/Figure 3 - Final.jpg}
+    \includegraphics[width=\textwidth]{figures/Figure 3.jpg}
     \caption{Dataflow of the proposed UA-HCI framework. Acoustic preprocessing generates layer-wise features for the Random Forest cascade. Confident samples exit in Layers 1--3, while uncertain samples are routed to the Layer-4 hybrid spectrogram and MobileNetV2 DPU path.}
     \label{fig3}
 \end{figure*}
@@ -126,8 +126,24 @@ The ARM Processing System (PS) executes acoustic preprocessing, statistical feat
 \subsubsection{Programmable Logic Allocation}
 Layer 4 is offloaded to the Programmable Logic (PL) through the Xilinx Deep Learning Processor Unit (DPU). The input tensor for this stage is $3\times224\times224$, and the output is a 3-dimensional probability vector. Unlike the Random Forest layers, MobileNetV2 is dominated by regular convolutional and matrix operations. After INT8 quantization, the DPU executes integer multiply-accumulate operations using spatial parallelism across DSP slices and on-chip buffers.
 
+Fig.~\ref{fig4} illustrates the internal micro-architecture of the DPU deployed on the Ultra96-V2 Programmable Logic. The DPU loads quantized INT8 weights from a dedicated weights SRAM buffer and feature maps from a feature map SRAM buffer, feeding them into a systolic-style Processing Element (PE) array. Each PE Cell performs a fused multiply-accumulate (MAC) operation: weights and input activations are multiplied and accumulated through a pipelined chain, enabling data-parallel convolution across multiple output channels simultaneously. This spatial parallelism is the key mechanism by which the DPU achieves sub-10~ms inference for MobileNetV2 on the Ultra96-V2 platform.
+\begin{figure*}[htbp]
+    \centering
+    \includegraphics[width=0.92\textwidth]{figures/Figure Parallel Computing on Layer 4.jpg}
+    \caption{Internal micro-architecture of the Xilinx DPU deployed on the Ultra96-V2 Programmable Logic for Layer-4 CNN inference. The DPU feeds quantized INT8 weights and feature maps from on-chip SRAM buffers into a systolic Processing Element (PE) array. Each PE Cell performs a fused multiply-accumulate (MAC) operation, enabling fine-grained spatial parallelism across DSP slices for low-latency MobileNetV2 inference.}
+    \label{fig4}
+\end{figure*}
+
 \subsubsection{Uncertainty-Aware PS--PL Routing}
 The PS invokes the PL only when the Random Forest cascade cannot make a confident decision. If $S_i(x)\ge\tau_i$ at any layer $i\in\{1,2,3\}$, the diagnostic result is returned directly from the PS. Otherwise, the PS generates the hybrid spectrogram tensor and transfers it to the DPU through the AXI interface. This routing strategy reduces unnecessary CNN execution and directly supports edge deployment under power and latency constraints.
 
 \subsubsection{Quantization-Aware Deployment}
 To support integer-only acceleration, quantization-aware training (QAT) is applied to the MobileNetV2 student. The model is calibrated using 32 batches and fine-tuned for five epochs with a learning rate of $1\times10^{-5}$. The resulting INT8 model targets DPU-compatible inference while preserving the accuracy of the distilled student model. This enables the CNN stage to benefit from FPGA spatial parallelism without relying on floating-point execution in the PL.
+
+The complete model development and deployment workflow spans three sequential phases, illustrated in Fig.~\ref{fig5}. In \textbf{Phase 1}, the EfficientNet-B0 teacher ensemble and the MobileNetV2 student are trained using the knowledge distillation objective. Teacher logits are converted into soft labels, and the student is jointly supervised by the KD loss and a hard classification loss computed against ground-truth labels. In \textbf{Phase 2}, the distillation-trained student is quantized using the Vitis AI PyTorch quantizer. Quantize-Dequantize (Q/DQ) nodes are inserted around convolutional layers, and the model undergoes an iterative QAT loop in which straight-through estimator (STE) gradients are propagated through the quantization operations to fine-tune weight and activation scale factors. The compiled output is an \texttt{.xmodel} file targeting the DPU architecture. In \textbf{Phase 3}, the \texttt{.xmodel} is deployed on the Xilinx FPGA platform and executed through the DPU Engine under the application code layer, completing the pipeline from audio input to edge diagnostic output.
+\begin{figure*}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{figures/Figure Training KD + Optimization.jpg}
+    \caption{Three-phase model development and FPGA deployment pipeline. Phase~1 performs knowledge distillation from an EfficientNet-B0 teacher ensemble to a MobileNetV2 student using a combined KD and hard-label loss. Phase~2 applies Vitis AI quantization-aware training (QAT), inserting Q/DQ nodes and using STE gradients to produce a DPU-compatible INT8 \texttt{.xmodel}. Phase~3 deploys the compiled model on the Xilinx FPGA platform through the DPU Engine for edge inference.}
+    \label{fig5}
+\end{figure*}

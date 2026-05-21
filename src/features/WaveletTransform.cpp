@@ -25,13 +25,6 @@
 namespace respiratory {
 
 // ============================================================================
-// CONSTANTS
-// ============================================================================
-
-constexpr float PI = 3.14159265358979323846f;
-constexpr float EPSILON = 1e-10f;
-
-// ============================================================================
 // SPECTROGRAM IMPLEMENTATION
 // ============================================================================
 
@@ -84,10 +77,8 @@ void WaveletTransform::initializeScales() {
     m_scales.clear();
     m_frequencies.clear();
     
-    float omega0 = m_config.morletOmega0;
-    float dt = 1.0f / m_config.sampleRate;
-    
     // Tính scale_min và scale_max từ frequency range
+    // (dùng frequencyToScale() nội bộ tính omega0 và dt)
     float scaleMin = frequencyToScale(m_config.maxFreq);
     float scaleMax = frequencyToScale(m_config.minFreq);
     

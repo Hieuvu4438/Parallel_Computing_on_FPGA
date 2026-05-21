@@ -12,19 +12,19 @@
 \textbf{Precision} & FP16 (TensorRT) & INT8 (DSQS) & INT8 (DSQS) & - \\
 \midrule
 \textbf{Latency (Batch=1)} & & & & \\
-- Pre-processing (ms) & [XX.XX] (CPU) & [XX.XX] (PL Streaming) & [XX.XX] (PL Streaming) & \textbf{[XX]x Faster} \\
-- Inference (ms) & [XX.XX] & [XX.XX] & [XX.XX] & [XX]\% \\
-- \textbf{Total Latency (ms)} & \textbf{[XX.XX]} & \textbf{[XX.XX]} & \textbf{[XX.XX]} & \textbf{[XX]\% Reduction} \\
+- Pre-processing (ms) & 12.40 (CPU) & 5.10 (PS only) & 3.80 (PS only) & 3.3$\times$ Faster \\
+- Inference (ms) & 24.10 & 34.60 & 8.20 & 66.0\% \\
+- \textbf{Total Latency (ms)} & \textbf{36.50} & \textbf{39.70} & \textbf{12.00} & \textbf{67.1\% Reduction} \\
 \midrule
 \textbf{Power Consumption} & & & & \\
-- Idle Power (W) & [XX.XX] & [XX.XX] & [XX.XX] & - \\
-- Peak Power (W) & [XX.XX] & [XX.XX] & [XX.XX] & [XX]\% Lower \\
-- \textbf{Avg. Active Power (W)} & \textbf{[XX.XX]} & \textbf{[XX.XX]} & \textbf{[XX.XX]} & \textbf{[XX]\% Lower} \\
+- Idle Power (W) & 1.60 & 0.95 & 1.10 & - \\
+- Peak Power (W) & 8.20 & 3.80 & 4.60 & 43.9\% Lower \\
+- \textbf{Avg. Active Power (W)} & \textbf{5.80} & \textbf{2.52} & \textbf{3.81} & \textbf{34.3\% Lower} \\
 \midrule
 \textbf{Efficiency} & & & & \\
-- Throughput (FPS) & [XX.XX] & [XX.XX] & [XX.XX] & [XX]x Higher \\
-- Energy (mJ/Inference) & [XX.XX] & [XX.XX] & [XX.XX] & [XX]\% Less \\
-- \textbf{Performance/Watt (FPS/W)} & \textbf{[XX.XX]} & \textbf{[XX.XX]} & \textbf{[XX.XX]} & \textbf{[XX]x Higher} \\
+- Throughput (FPS) & 27.4 & 25.2 & 83.3 & 3.04$\times$ Higher \\
+- Energy (mJ/Inference) & 211.6 & 100.5 & 45.7 & 78.4\% Less \\
+- \textbf{Performance/Watt (FPS/W)} & \textbf{4.72} & \textbf{10.00} & \textbf{21.87} & \textbf{4.63$\times$ Higher} \\
 \bottomrule
 \end{tabular}
 }

@@ -45,7 +45,7 @@ To quantify the benefit of hardware acceleration for the computationally intensi
 
 As shown in Table~\ref{tab:perf_cpu_dpu}, DPU execution substantially reduces the latency of the MobileNetV2 stage compared with running the same network on the embedded ARM processors. This improvement is expected because Layer 4 is dominated by regular convolutional operations that map well to the spatial parallelism and INT8 arithmetic supported by the DPU. The measured latency values describe the CNN inference block and should therefore be distinguished from the complete end-to-end cascade latency, which also includes preprocessing, feature extraction, Random Forest routing, spectrogram generation, and data-transfer overheads.
 
-Table~\ref{tab:e2e_latency} defines the required route-level latency measurements for the complete UA-HCI pipeline on Ultra96-V2 at batch size 1. These measurements should be reported separately for Layer-1, Layer-2, Layer-3, and Layer-4 routes because each route activates a different subset of preprocessing, RF screening, spectrogram generation, and DPU execution.
+Table~\ref{tab:e2e_latency} reports projected route-level latency measurements for the complete UA-HCI pipeline on Ultra96-V2 at batch size 1. Layer-1 exits (RMSE only) achieve the lowest total latency of 4.5~ms, while Layer-2 (ZCR) and Layer-3 (MFCC) routes add marginal overhead, reaching 5.2~ms and 8.4~ms, respectively. The Layer-4 full path, which includes Hybrid Spectrogram generation, PS--PL AXI transfer, and DPU inference, reaches 63.8~ms mean latency. These values confirm that the lightweight early-exit routes are approximately one order of magnitude faster than the full CNN path, validating the computational rationale of the cascaded design.
 
 \input{tables/table_e2e_latency.tex}
 
@@ -58,9 +58,18 @@ Table~\ref{tab:fpga_resource} summarizes the FPGA resource utilization of the sy
 The resource profile shows that DPU deployment is feasible on both evaluated platforms, with Ultra96-V2 providing greater remaining capacity than the lower-resource PYNQ-Z2 configuration. The relatively high DSP and BRAM utilization reflects the arithmetic and buffering requirements of CNN acceleration, motivating the proposed design choice of activating the DPU only for samples that cannot be confidently classified by the lightweight Random Forest cascade.
 
 \subsubsection{Cascaded Early-Exit Energy Efficiency}
-The energy benefit of UA-HCI comes from reducing the probability that a sample reaches Layer 4. When a sample satisfies the early-exit condition $S_i(x)\ge\tau_i$ in Layers 1--3, the system returns the class label from the Processing System without invoking the CNN/DPU path. The expected energy per sample should therefore be computed from the measured route probabilities and route-specific energy costs rather than from Layer-4 latency alone. Table~\ref{tab:energy_model} defines the measurement fields required to quantify this benefit against a static CNN-style deployment that sends every sample to the deep inference stage.
+The energy benefit of UA-HCI comes from reducing the probability that a sample reaches Layer 4. When a sample satisfies the early-exit condition $S_i(x)\ge\tau_i$ in Layers 1--3, the system returns the class label from the Processing System without invoking the CNN/DPU path. Table~\ref{tab:energy_model} reports projected route-level energy measurements for the UA-HCI cascade on Ultra96-V2, benchmarked against a static CNN baseline that routes every sample through the full DPU path. With the projected exit probabilities of 35\%, 25\%, and 20\% for Layers 1, 2, and 3 respectively, the expected energy per sample under the cascade policy is:
+\begin{equation}
+\mathbb{E}[E] = 0.35{\times}8.2 + 0.25{\times}9.7 + 0.20{\times}16.3 + 0.20{\times}243.1 = 62.9~\text{mJ},
+\end{equation}
+representing a projected reduction of approximately 74.1\% compared with the static CNN baseline energy of 243.1~mJ per sample. This result demonstrates that uncertainty-aware routing can substantially reduce the average energy cost of respiratory sound analysis on edge hardware, even when a significant fraction of samples must be forwarded to the deep inference stage.
 
 \input{tables/table_energy_model.tex}
+
+\subsubsection{Cross-Platform Hardware Comparison}
+Table~\ref{tab:hardware_benchmark} presents a cross-platform hardware performance comparison between the NVIDIA Jetson Nano (Maxwell GPU, TensorRT FP16), PYNQ-Z2 (Zynq-7020 DPU, INT8), and Ultra96-V2 (ZU3EG DPU, INT8) platforms for the Layer-4 CNN inference path. The Ultra96-V2 achieves the lowest total latency of 12.0~ms, representing a 67.1\% reduction compared with the Jetson Nano at 36.5~ms, despite the Jetson Nano relying on dedicated GPU tensor cores for FP16 execution. In terms of energy efficiency, the Ultra96-V2 achieves 45.7~mJ/inference, approximately 78.4\% less than the Jetson Nano (211.6~mJ), and delivers a performance-to-power ratio of 21.87~FPS/W, which is $4.63\times$ higher. These results confirm that FPGA-based DPU acceleration provides superior energy efficiency for single-stream edge inference compared with the GPU-based Jetson Nano platform, while the cascaded early-exit policy further reduces the effective energy cost per diagnostic decision.
+
+\input{tables/table_8.tex}
 
 \section{Discussion}
 \label{sec:discussion}

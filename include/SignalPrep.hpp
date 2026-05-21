@@ -33,10 +33,7 @@
 #include <map>
 #include <functional>
 
-// Define M_PI if not available (Windows/MinGW compatibility)
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
+#include "Common.h"
 
 namespace respiratory {
 
@@ -44,8 +41,8 @@ namespace respiratory {
 // CONSTANTS - Theo thông số kỹ thuật từ bài báo IEEE
 // ============================================================================
 
-/// Tần số lấy mẫu mục tiêu (Hz) - Target sampling rate
-constexpr float TARGET_SAMPLE_RATE = 4000.0f;
+/// Tần số lấy mẫu mục tiêu (Hz) - lấy từ Common.h (SYSTEM_SAMPLE_RATE = 4000 Hz)
+constexpr float TARGET_SAMPLE_RATE = SYSTEM_SAMPLE_RATE;
 
 /// Tần số cắt thấp của bộ lọc band-pass (Hz) - Low cutoff frequency
 constexpr float BANDPASS_LOW_FREQ = 50.0f;

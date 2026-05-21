@@ -157,7 +157,7 @@ if(BUILD_TESTS)
     
     # Test cho SignalPrep
     add_executable(test_signal_prep
-        tests/test_signal_prep.cpp
+        tests/cpp/test_signal_prep.cpp
     )
     target_link_libraries(test_signal_prep PRIVATE respiratory_lib)
     add_test(NAME TestSignalPrep COMMAND test_signal_prep)

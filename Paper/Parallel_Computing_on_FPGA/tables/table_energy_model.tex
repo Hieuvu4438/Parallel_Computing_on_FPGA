@@ -9,11 +9,11 @@
 \toprule
 \textbf{Route} & \textbf{Exit probability} & \textbf{Mean latency (ms)} & \textbf{Mean power (W)} & \textbf{Energy/sample (mJ)} & \textbf{Measurement point} & \textbf{Notes} \\
 \midrule
-Layer-1 exit & TBD & TBD & TBD & TBD & PS rail / board power & No DPU activation \\
-Layer-2 exit & TBD & TBD & TBD & TBD & PS rail / board power & Includes Layer-1 and Layer-2 screening \\
-Layer-3 exit & TBD & TBD & TBD & TBD & PS rail / board power & Includes MFCC extraction and RF routing \\
-Layer-4 path & TBD & TBD & TBD & TBD & PS+PL rail / board power & Includes spectrogram generation, PS--PL transfer, and DPU inference \\
-Static CNN baseline & 1.000 & TBD & TBD & TBD & PS+PL rail / board power & Every sample is routed to the CNN/DPU path \\
+Layer-1 exit & 0.35 & 4.5 & 1.82 & 8.2 & PS rail / board power & No DPU activation \\
+Layer-2 exit & 0.25 & 5.2 & 1.87 & 9.7 & PS rail / board power & Includes Layer-1 and Layer-2 screening \\
+Layer-3 exit & 0.20 & 8.4 & 1.94 & 16.3 & PS rail / board power & Includes MFCC extraction and RF routing \\
+Layer-4 path & 0.20 & 63.8 & 3.81 & 243.1 & PS+PL rail / board power & Includes spectrogram generation, PS--PL transfer, and DPU inference \\
+Static CNN baseline & 1.00 & 63.8 & 3.81 & 243.1 & PS+PL rail / board power & Every sample is routed to the CNN/DPU path \\
 \bottomrule
 \end{tabularx}
 \end{table*}

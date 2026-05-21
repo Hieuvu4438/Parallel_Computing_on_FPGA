@@ -30,9 +30,11 @@
 #include <cstdint>
 #include <map>
 
-// Forward declarations for Layer 4
+// Project includes
 #include "WaveletTransform.hpp"
 #include "CnnInference.hpp"
+#include "FeatureExtraction.h"
+#include "SignalPrep.hpp"
 
 namespace respiratory {
 
@@ -810,19 +812,6 @@ float computeAccuracy(const std::vector<PredictionClass>& predictions,
  */
 void printConfusionMatrix(const std::vector<PredictionClass>& predictions,
                           const std::vector<int>& labels);
-
-} // namespace respiratory
-
-// ============================================================================
-// TRAINING & EVALUATION UTILITIES (requires full type definitions)
-// These are declared after namespace to allow forward reference resolution
-// ============================================================================
-
-// Include here to get full type definitions
-#include "FeatureExtraction.h"
-#include "SignalPrep.hpp"
-
-namespace respiratory {
 
 /**
  * @brief Chuyển đổi CycleFeatures sang FeatureVector cho classifier

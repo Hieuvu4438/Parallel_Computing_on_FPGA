@@ -39,6 +39,11 @@ constexpr double PI = 3.14159265358979323846;
 /// Epsilon để tránh chia cho 0
 constexpr float EPSILON = 1e-10f;
 
+/// Tần số lấy mẫu mục tiêu của toàn bộ hệ thống (Hz)
+/// Dùng làm nguồn duy nhất (single source of truth) cho sample rate 4kHz.
+/// Tất cả modules (SignalPrep, FeatureExtraction, WaveletTransform) dùng giá trị này.
+constexpr float SYSTEM_SAMPLE_RATE = 4000.0f;
+
 // ============================================================================
 // ENUMS
 // ============================================================================

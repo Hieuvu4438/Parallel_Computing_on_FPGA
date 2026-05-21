@@ -727,6 +727,7 @@ CnnInference createDpuInference(const std::string& xmodelPath) {
     
     // Set placeholder callback with warning
     inference.setCustomInferenceCallback([](const std::vector<float>& input) {
+        (void)input;  // Placeholder: input unused until actual DPU callback is implemented
         std::cerr << "[Warning] DPU callback not implemented. "
                   << "Please set actual Vitis-AI callback.\n";
         

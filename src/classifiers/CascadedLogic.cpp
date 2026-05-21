@@ -636,6 +636,7 @@ void SeptupleForest::computeMajorityVote(
     const std::array<ClusterVote, NUM_FOREST_CLUSTERS>& votes,
     LayerResult& result) const {
     
+    (void)votes;  // votes are already aggregated into result.voteCounts above
     // Find class with most votes
     int maxVotes = 0;
     int maxClass = 0;
