@@ -140,3 +140,8 @@ package-lock.json
 
 # Test files
 test_api.py
+
+# Claude Code Switch & Claude local configs
+.ccs_local/
+ccs
+claude
