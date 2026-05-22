@@ -44,6 +44,9 @@ from scipy import signal as scipy_signal
 from scipy.io import wavfile
 from scipy.ndimage import zoom as scipy_zoom
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from python.common.paths import COMBINED_AUDIO_DIR, COMBINED_LABELS, LAYER13_ARTIFACTS_DIR
+
 warnings.filterwarnings('ignore')
 
 # ==============================================================================
@@ -698,17 +701,17 @@ def main():
     )
     parser.add_argument(
         '--data_dir', type=str,
-        default='/home/iec/Parallel_Computing_on_FPGA/data/combined/audio',
+        default=str(COMBINED_AUDIO_DIR),
         help='Thư mục chứa audio files (cấu trúc: audio/{COPD,Healthy,Non-COPD}/)'
     )
     parser.add_argument(
         '--labels_csv', type=str,
-        default='/home/iec/Parallel_Computing_on_FPGA/data/combined/labels.csv',
+        default=str(COMBINED_LABELS),
         help='File labels.csv'
     )
     parser.add_argument(
         '--output_dir', type=str,
-        default='/home/iec/Parallel_Computing_on_FPGA/layer1_3/output',
+        default=str(LAYER13_ARTIFACTS_DIR / 'layer1'),
         help='Thư mục output cho features.csv và spectrograms/'
     )
     parser.add_argument(

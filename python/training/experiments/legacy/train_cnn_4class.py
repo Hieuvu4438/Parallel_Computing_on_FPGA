@@ -98,7 +98,6 @@ class Config:
     # Training
     epochs: int = 150
     phase1_epochs: int = 20     # Epochs cho phase 1 (frozen backbone)
-<<<<<<< HEAD
     batch_size: int = 32        # Giảm để ổn định hơn
     
     # Learning rates
@@ -111,20 +110,6 @@ class Config:
     
     # Early Stopping
     patience: int = 15          # Số epochs chờ khi không cải thiện
-=======
-    batch_size: int = 128        # Giảm để ổn định hơn
-    
-    # Learning rates
-    lr_phase1: float = 2e-3     # LR cho classifier head
-    lr_phase2: float = 2e-5     # LR rất thấp cho fine-tuning
-    
-    # Regularization
-    dropout: float = 0.4
-    weight_decay: float = 0.02
-    
-    # Early Stopping
-    patience: int = 20          # Số epochs chờ khi không cải thiện
->>>>>>> latex
     min_delta: float = 0.001    # Ngưỡng cải thiện tối thiểu
     
     # Data Augmentation

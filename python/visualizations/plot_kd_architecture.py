@@ -1,6 +1,13 @@
+import argparse
 import os
+import sys
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from python.common.paths import PAPER_FIGURES_DIR
 
 def draw_box(ax, x, y, width, height, text, bg_color, edge_color, text_color='black', fontsize=10):
     box = patches.FancyBboxPatch(
@@ -125,7 +132,11 @@ def plot_kd_diagram(filename):
     plt.close()
 
 if __name__ == '__main__':
-    output_dir = "/home/iec/Parallel_Computing_on_FPGA/scripts/output_nn_images"
+    parser = argparse.ArgumentParser(description="Plot knowledge distillation architecture")
+    parser.add_argument('--output_dir', type=str, default=str(PAPER_FIGURES_DIR))
+    args = parser.parse_args()
+
+    output_dir = args.output_dir
     os.makedirs(output_dir, exist_ok=True)
     out_file = os.path.join(output_dir, "KD_Architecture.png")
     plot_kd_diagram(out_file)

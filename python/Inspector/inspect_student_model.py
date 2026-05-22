@@ -34,6 +34,9 @@ import argparse
 import logging
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from python.common.paths import ARTIFACTS_DIR
+
 import torch
 import torch.nn as nn
 from torchvision import models
@@ -106,9 +109,9 @@ def run_inspector(checkpoint_path: str, target: str, output_dir: str):
         logger.error(
             "❌ Không thể import pytorch_nndct!\n"
             "   Đảm bảo bạn đang chạy trong Vitis AI 3.5 Docker environment.\n"
-            "   Lệnh khởi động Docker:\n"
+            "   Lệnh khởi động Docker từ repo root:\n"
             "     docker run --gpus all -it --rm \\\n"
-            "       -v /home/iec:/workspace \\\n"
+            "       -v \"$PWD\":/workspace \\\n"
             "       xilinx/vitis-ai-pytorch-gpu:3.5.0.001\n"
             f"   Lỗi chi tiết: {e}"
         )
@@ -256,24 +259,7 @@ def print_result_guide():
 # ==============================================================================
 # MAIN
 # ==============================================================================
-# Tự động detect đường dẫn cho Docker vs Host
-def get_project_root():
-    """Detect project root: /workspace (Docker) or /home/iec/... (host)"""
-    # Docker mounts /home/iec/Parallel_Computing_on_FPGA -> /workspace
-    if os.path.isfile('/workspace/CMakeLists.txt') and not os.path.isdir('/workspace/Parallel_Computing_on_FPGA'):
-        return '/workspace'
-    if os.path.isdir('/workspace/Parallel_Computing_on_FPGA'):
-        return '/workspace/Parallel_Computing_on_FPGA'
-    return '/home/iec/Parallel_Computing_on_FPGA'
-
-
 def parse_args():
-    project_root = get_project_root()
-    default_ckpt = os.path.join(
-        project_root, 'python/output_distillation_v2/checkpoints/student_fold_0_best.pt'
-    )
-    default_arch = os.path.join(project_root, 'vitis_ai_flow/arch.json')
-
     parser = argparse.ArgumentParser(
         description='Vitis AI Model Inspector cho Student MobileNetV2',
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -290,8 +276,13 @@ Ví dụ sử dụng:
         """
     )
     parser.add_argument(
+        '--artifact_root', type=str,
+        default=str(ARTIFACTS_DIR),
+        help='Root artifacts directory for default checkpoint/output paths'
+    )
+    parser.add_argument(
         '--checkpoint', type=str,
-        default=default_ckpt,
+        default=None,
         help='Đường dẫn đến file checkpoint .pt (default: student_fold_0_best.pt)'
     )
     parser.add_argument(
@@ -299,14 +290,22 @@ Ví dụ sử dụng:
         help='DPU target name (default: DPUCZDX8G_ISA1_B2304 cho Ultra96-V2)'
     )
     parser.add_argument(
-        '--arch', type=str, default=default_arch,
-        help=f'Đường dẫn đến arch.json (default: {default_arch})'
+        '--arch', type=str, default=None,
+        help='Đường dẫn đến arch.json nếu muốn dùng target từ file'
     )
     parser.add_argument(
-        '--output_dir', type=str, default='./inspect_results',
+        '--output_dir', type=str, default=None,
         help='Thư mục lưu kết quả inspection'
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    artifact_root = Path(args.artifact_root)
+    if args.checkpoint is None:
+        args.checkpoint = str(
+            artifact_root / 'training' / 'distillation_v2' / 'checkpoints' / 'student_fold_0_best.pt'
+        )
+    if args.output_dir is None:
+        args.output_dir = str(artifact_root / 'quantization' / 'inspect_student_model')
+    return args
 
 
 def main():

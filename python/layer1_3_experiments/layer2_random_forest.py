@@ -52,6 +52,9 @@ from sklearn.metrics import (
     f1_score, precision_score, recall_score
 )
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from python.common.paths import COMBINED_LABELS, LAYER13_ARTIFACTS_DIR
+
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -69,10 +72,11 @@ warnings.filterwarnings('ignore')
 # CẤU HÌNH (Configuration)
 # ==============================================================================
 # --- Paths ---
-DEFAULT_FEATURES_CSV = '/home/iec/Parallel_Computing_on_FPGA/layer1_3/output/features.csv'
-DEFAULT_LABELS_CSV = '/home/iec/Parallel_Computing_on_FPGA/data/combined/labels.csv'
-DEFAULT_OUTPUT_DIR = '/home/iec/Parallel_Computing_on_FPGA/layer1_3/output_layer2'
-DEFAULT_SPECTROGRAM_DIR = '/home/iec/Parallel_Computing_on_FPGA/layer1_3/output/spectrograms'
+DEFAULT_LAYER1_DIR = LAYER13_ARTIFACTS_DIR / 'layer1'
+DEFAULT_FEATURES_CSV = str(DEFAULT_LAYER1_DIR / 'features.csv')
+DEFAULT_LABELS_CSV = str(COMBINED_LABELS)
+DEFAULT_OUTPUT_DIR = str(LAYER13_ARTIFACTS_DIR / 'layer2')
+DEFAULT_SPECTROGRAM_DIR = str(DEFAULT_LAYER1_DIR / 'spectrograms')
 
 # --- Random Forest (tối ưu cho ARM Cortex-A53) ---
 RF_N_ESTIMATORS = 100        # Số cây (cân bằng accuracy/speed)

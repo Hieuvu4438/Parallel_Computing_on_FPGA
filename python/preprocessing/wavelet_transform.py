@@ -1,8 +1,16 @@
+import argparse
+import os
+import sys
+from pathlib import Path
+
 import numpy as np
 
 import pywt
 
 import cv2
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from python.common.paths import PROCESSED_AUDIO_DIR, SPECTROGRAMS_DIR
 
 
 
@@ -127,17 +135,27 @@ def batch_generate_spectrograms(signals: list, scales: np.ndarray = np.arange(1,
 
 if __name__ == "__main__":
 
-    import os
-
     import librosa
 
     from tqdm import tqdm
 
 
 
-    input_base_dir = "/home/iec/Parallel_Computing_on_FPGA/data/combined/processed_audio"
+    parser = argparse.ArgumentParser(description="Generate wavelet spectrograms from processed audio")
 
-    output_base_dir = "/home/iec/Parallel_Computing_on_FPGA/data/combined/spectrograms"
+    parser.add_argument("--data_dir", type=str, default=str(PROCESSED_AUDIO_DIR),
+                        help="Directory containing processed audio class subfolders")
+
+    parser.add_argument("--output_dir", type=str, default=str(SPECTROGRAMS_DIR),
+                        help="Directory for generated spectrogram images")
+
+    args = parser.parse_args()
+
+
+
+    input_base_dir = args.data_dir
+
+    output_base_dir = args.output_dir
 
 
 

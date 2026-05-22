@@ -23,11 +23,11 @@ Output:
 
 Usage:
     python distillation_02.py \\
-        --data_dir /home/iec/Parallel_Computing_on_FPGA/data/samples/ICBHI_final_database \\
-        --labels_file /home/iec/Parallel_Computing_on_FPGA/data/samples/labels.txt \\
-        --combined_dir /home/iec/Parallel_Computing_on_FPGA/data/combined/audio \\
-        --combined_labels /home/iec/Parallel_Computing_on_FPGA/data/combined/labels.csv \\
-        --output_dir ./output_distillation_v2
+        --data_dir data/samples/ICBHI_final_database \\
+        --labels_file data/samples/labels.txt \\
+        --combined_dir data/combined/audio \\
+        --combined_labels data/combined/labels.csv \\
+        --output_dir artifacts/training/distillation_v2
 
 Target: Accuracy > 95%
 """
@@ -76,6 +76,15 @@ try:
     HAS_TORCHAUDIO = True
 except ImportError:
     HAS_TORCHAUDIO = False
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from python.common.paths import (
+    COMBINED_AUDIO_DIR,
+    COMBINED_LABELS,
+    ICBHI_DIR,
+    ICBHI_LABELS,
+    TRAINING_ARTIFACTS_DIR,
+)
 
 try:
     import librosa
@@ -1431,14 +1440,14 @@ def main():
 
     parser = argparse.ArgumentParser(description='Knowledge Distillation v2 — ICBHI + Combined')
     parser.add_argument('--data_dir', type=str,
-                        default='/home/iec/Parallel_Computing_on_FPGA/data/samples/ICBHI_final_database')
+                        default=str(ICBHI_DIR))
     parser.add_argument('--labels_file', type=str,
-                        default='/home/iec/Parallel_Computing_on_FPGA/data/samples/labels.txt')
+                        default=str(ICBHI_LABELS))
     parser.add_argument('--combined_dir', type=str,
-                        default='/home/iec/Parallel_Computing_on_FPGA/data/combined/audio',
+                        default=str(COMBINED_AUDIO_DIR),
                         help='Combined dataset audio dir with COPD/Healthy/Non-COPD subdirs')
     parser.add_argument('--combined_labels', type=str,
-                        default='/home/iec/Parallel_Computing_on_FPGA/data/combined/labels.csv',
+                        default=str(COMBINED_LABELS),
                         help='Combined dataset labels CSV')
     parser.add_argument('--use_icbhi', action='store_true', default=True,
                         help='Include ICBHI dataset (default: True)')
@@ -1448,7 +1457,8 @@ def main():
                         help='Exclude ICBHI dataset')
     parser.add_argument('--no_combined', action='store_true', default=False,
                         help='Exclude combined dataset')
-    parser.add_argument('--output_dir', type=str, default='./output_distillation_v2_2')
+    parser.add_argument('--output_dir', type=str, default=None)
+    parser.add_argument('--artifact_root', type=str, default=str(TRAINING_ARTIFACTS_DIR))
     parser.add_argument('--n_folds', type=int, default=N_FOLDS)
     parser.add_argument('--batch_size', type=int, default=BATCH_SIZE)
     parser.add_argument('--num_workers', type=int, default=NUM_WORKERS)
@@ -1483,6 +1493,9 @@ def main():
         STUDENT_EPOCHS_STAGE2 = 1
         TEACHER_ENSEMBLE_SIZE = 1
         N_FOLDS = 2
+
+    if args.output_dir is None:
+        args.output_dir = str(Path(args.artifact_root) / 'distillation_v2')
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)

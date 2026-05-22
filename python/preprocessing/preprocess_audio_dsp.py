@@ -1,5 +1,9 @@
+import argparse
 import os
 import glob
+import sys
+from pathlib import Path
+
 import numpy as np
 import librosa
 import scipy.signal as signal
@@ -8,6 +12,9 @@ import pywt
 from PIL import Image
 import torch
 import torchvision.transforms as transforms
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from python.common.paths import ARTIFACTS_DIR, ICBHI_DIR
 try:
     from tqdm import tqdm
 except ImportError:
@@ -129,17 +136,27 @@ def preprocess_and_save(wav_path, output_dir, target_sr=4000, img_size=(224, 224
 # HÀM THỰC THI (MAIN)
 # ==============================================================================
 def main():
+    parser = argparse.ArgumentParser(
+        description="Create CWT calibration spectrograms for Vitis AI quantization"
+    )
+    parser.add_argument("--data_dir", type=str, default=str(ICBHI_DIR),
+                        help="Directory containing source .wav files")
+    parser.add_argument("--output_dir", type=str, default=None,
+                        help="Directory for generated calibration images")
+    parser.add_argument("--artifact_root", type=str, default=str(ARTIFACTS_DIR),
+                        help="Root artifacts directory used when --output_dir is omitted")
+    args = parser.parse_args()
+
     print("="*70)
     print(" AUDIO PREPROCESSING PIPELINE (CWT) FOR XILINX FPGA QUANTIZATION ")
     print("="*70)
-    
-    # Định nghĩa thư mục input/output
-    data_dir = "/home/iec/Parallel_Computing_on_FPGA/data/samples/ICBHI_final_database"
-    output_dir = "/home/iec/Parallel_Computing_on_FPGA/data/calib_images_02"
-    
+
+    data_dir = Path(args.data_dir)
+    output_dir = Path(args.output_dir) if args.output_dir else Path(args.artifact_root) / "quantization" / "calibration_data" / "cwt_images"
+
     # Tạo folder chứa ảnh Calibration (Quantization)
     os.makedirs(output_dir, exist_ok=True)
-    
+
     wav_files = glob.glob(os.path.join(data_dir, "*.wav"))
     if not wav_files:
         print(f"[!] Không tìm thấy file .wav nào trong: {data_dir}")

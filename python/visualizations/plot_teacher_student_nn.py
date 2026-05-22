@@ -1,5 +1,12 @@
+import argparse
 import os
+import sys
+from pathlib import Path
+
 import matplotlib.pyplot as plt
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from python.common.paths import PAPER_FIGURES_DIR
 
 def draw_neural_net(ax, left, right, bottom, top, layer_sizes):
     '''
@@ -57,9 +64,13 @@ def generate_nn_image(layer_sizes, filename):
     plt.close()
 
 if __name__ == '__main__':
-    output_dir = "/home/iec/Parallel_Computing_on_FPGA/scripts/output_nn_images"
+    parser = argparse.ArgumentParser(description="Plot teacher/student neural-network sketches")
+    parser.add_argument('--output_dir', type=str, default=str(PAPER_FIGURES_DIR))
+    args = parser.parse_args()
+
+    output_dir = args.output_dir
     os.makedirs(output_dir, exist_ok=True)
-    
+
     # Teacher Model: 3 layers, dense hidden layer
     # Input: 8 nodes, Hidden: 12 nodes, Output: 4 nodes
     teacher_layers = [8, 12, 4]

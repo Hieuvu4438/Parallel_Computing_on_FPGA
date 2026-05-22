@@ -23,21 +23,21 @@ import glob
 from pathlib import Path
 from collections import Counter
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from python.common.paths import COMBINED_DIR, ICBHI_DIR, ICBHI_LABELS, SAMPLES_02_DIR
+
 # ---------------------------------------------------------------------------
 # Cấu hình đường dẫn
 # ---------------------------------------------------------------------------
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-
-# Dataset 1: ICBHI 2017
-ICBHI_AUDIO_DIR = PROJECT_ROOT / "data" / "samples" / "ICBHI_final_database"
-ICBHI_LABELS_FILE = PROJECT_ROOT / "data" / "samples" / "labels.txt"
+ICBHI_AUDIO_DIR = ICBHI_DIR
+ICBHI_LABELS_FILE = ICBHI_LABELS
 
 # Dataset 2: samples_02
-DS2_AUDIO_DIR = PROJECT_ROOT / "data" / "samples_02" / "Audio Files"
-DS2_ANNOTATION = PROJECT_ROOT / "data" / "samples_02" / "Data annotation.xlsx"
+DS2_AUDIO_DIR = SAMPLES_02_DIR / "Audio Files"
+DS2_ANNOTATION = SAMPLES_02_DIR / "Data annotation.xlsx"
 
 # Output mặc định
-DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "data" / "combined"
+DEFAULT_OUTPUT_DIR = COMBINED_DIR
 
 
 # ---------------------------------------------------------------------------

@@ -1,5 +1,11 @@
 import os
+import sys
 import argparse
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from python.common.paths import ARTIFACTS_DIR
+
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -101,13 +107,22 @@ def main():
     parser.add_argument('--quant_mode', type=str, default='calib', 
                         choices=['calib', 'test'], 
                         help="Chế độ định lượng. 'calib' để tính parameters; 'test' để evaluate và xuất file cấu hình.")
-    parser.add_argument('--model_dir', type=str, default="/home/iec/Parallel_Computing_on_FPGA/python/output_copd_v2", 
+    parser.add_argument('--artifact_root', type=str, default=str(ARTIFACTS_DIR),
+                        help="Root artifacts directory used for default paths")
+    parser.add_argument('--model_dir', type=str, default=None,
                         help="Đường dẫn chứa file best_model_fold_0.pth")
-    parser.add_argument('--calib_dir', type=str, default="/home/iec/Parallel_Computing_on_FPGA/data/calib_images_02", 
+    parser.add_argument('--calib_dir', type=str, default=None,
                         help="Đường dẫn chứa khoảng 200 ảnh PNG cho quá trình calibration")
-    parser.add_argument('--output_dir', type=str, default="/home/iec/Parallel_Computing_on_FPGA/vitis_ai_flow/quantize_result", 
+    parser.add_argument('--output_dir', type=str, default=None,
                         help="Đường dẫn thư mục lưu file kết quả định lượng")
     args = parser.parse_args()
+    artifact_root = Path(args.artifact_root)
+    if args.model_dir is None:
+        args.model_dir = str(artifact_root / "training" / "copd_binary")
+    if args.calib_dir is None:
+        args.calib_dir = str(artifact_root / "quantization" / "calibration_data" / "cwt_images")
+    if args.output_dir is None:
+        args.output_dir = str(artifact_root / "quantization" / "vitis_ai_flow")
 
     # 1. Khởi tạo Model Float và load trọng số
     print("="*70)

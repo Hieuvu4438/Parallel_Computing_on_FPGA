@@ -21,9 +21,9 @@ Pipeline: Raw WAV → Resample 4kHz → BPF → CWT Morlet Spectrogram → Effic
 
 Usage:
     python train_efficientnet_b0.py \\
-        --data_path /home/iec/Parallel_Computing_on_FPGA/data/combined/audio \\
-        --labels_csv /home/iec/Parallel_Computing_on_FPGA/data/combined/labels.csv \\
-        --output_dir ./output_efficientnet_b0_3class
+        --data_path data/combined/audio \\
+        --labels_csv data/combined/labels.csv \\
+        --output_dir artifacts/training/efficientnet_b0_3class
 
     # Quick test (1 fold, 2 epochs):
     python train_efficientnet_b0.py --dry_run --epochs 2
@@ -31,6 +31,7 @@ Usage:
 
 import os
 import gc
+import sys
 import json
 import argparse
 import warnings
@@ -62,6 +63,9 @@ from sklearn.metrics import (
     confusion_matrix, accuracy_score, f1_score,
     classification_report, precision_score, recall_score,
 )
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from python.common.paths import COMBINED_AUDIO_DIR, COMBINED_LABELS, TRAINING_ARTIFACTS_DIR
 
 try:
     from torchaudio.transforms import FrequencyMasking, TimeMasking
@@ -1139,11 +1143,13 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="EfficientNet-B0 Optimized Training — 3-Class Respiratory Sound")
-    parser.add_argument("--data_path", type=str,
-                        default="/home/iec/Parallel_Computing_on_FPGA/data/combined/audio")
+    parser.add_argument("--data_path", "--data_dir", dest="data_path", type=str,
+                        default=str(COMBINED_AUDIO_DIR))
     parser.add_argument("--labels_csv", type=str,
-                        default="/home/iec/Parallel_Computing_on_FPGA/data/combined/labels.csv")
-    parser.add_argument("--output_dir", type=str, default="./output_efficientnet_b0_3class")
+                        default=str(COMBINED_LABELS))
+    parser.add_argument("--output_dir", type=str, default=None)
+    parser.add_argument("--artifact_root", type=str,
+                        default=str(TRAINING_ARTIFACTS_DIR))
     parser.add_argument("--epochs", type=int, default=100,
                         help="Max epochs (actual may be less due to gradual unfreezing schedule)")
     parser.add_argument("--batch_size", type=int, default=16)
@@ -1151,4 +1157,6 @@ if __name__ == "__main__":
     parser.add_argument("--dry_run", action='store_true',
                         help="Run only 1 fold for quick testing")
     args = parser.parse_args()
+    if args.output_dir is None:
+        args.output_dir = str(Path(args.artifact_root) / "efficientnet_b0_3class")
     main(args)

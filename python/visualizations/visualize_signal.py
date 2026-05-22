@@ -1,4 +1,8 @@
+import argparse
 import os
+import sys
+from pathlib import Path
+
 import numpy as np
 import librosa
 import librosa.display
@@ -7,12 +11,14 @@ import scipy.signal as signal
 import pywt
 from scipy.ndimage import zoom
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from python.common.paths import ICBHI_DIR, PAPER_FIGURES_DIR
+
 # ==============================================================================
 # CONFIGURATION
 # ==============================================================================
-SAMPLE_WAV = "/home/iec/Parallel_Computing_on_FPGA/data/samples/ICBHI_final_database/101_1b1_Al_sc_Meditron.wav"
-OUTPUT_DIR = "/home/iec/Parallel_Computing_on_FPGA/assets/figures"
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+SAMPLE_WAV = str(ICBHI_DIR / "101_1b1_Al_sc_Meditron.wav")
+OUTPUT_DIR = str(PAPER_FIGURES_DIR)
 
 # BPF Parameters from Fixing_Paper.md
 BPF_L13 = (50, 2500)  # Layer 1-3
@@ -125,7 +131,15 @@ def plot_signal_transformation(wav_path):
     print(f"[SUCCESS] Clean CWT saved for paper figures.")
 
 if __name__ == "__main__":
-    if os.path.exists(SAMPLE_WAV):
-        plot_signal_transformation(SAMPLE_WAV)
+    parser = argparse.ArgumentParser(description="Plot signal preprocessing figures")
+    parser.add_argument('--sample_wav', type=str, default=SAMPLE_WAV)
+    parser.add_argument('--output_dir', type=str, default=OUTPUT_DIR)
+    args = parser.parse_args()
+
+    OUTPUT_DIR = args.output_dir
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+    if os.path.exists(args.sample_wav):
+        plot_signal_transformation(args.sample_wav)
     else:
-        print(f"[ERROR] Sample file not found: {SAMPLE_WAV}")
+        print(f"[ERROR] Sample file not found: {args.sample_wav}")

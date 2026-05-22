@@ -1,10 +1,17 @@
+import argparse
 import os
+import sys
+from pathlib import Path
+
 import pandas as pd
 import librosa
 import numpy as np
 import soundfile as sf
 from scipy.signal import butter, filtfilt
 from tqdm import tqdm
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from python.common.paths import COMBINED_AUDIO_DIR, COMBINED_LABELS, PROCESSED_AUDIO_DIR
 
 def butter_bandpass(lowcut, highcut, fs, order=4):
     """Design a Butterworth bandpass filter."""
@@ -78,11 +85,19 @@ def preprocess_file(input_path, output_path, target_sr=4000, lowcut=50, highcut=
         return False
 
 def main():
-    base_dir = "/home/iec/Parallel_Computing_on_FPGA/data/combined"
-    labels_file = os.path.join(base_dir, "labels.csv")
-    audio_dir = os.path.join(base_dir, "audio")
-    output_dir = os.path.join(base_dir, "processed_audio")
-    
+    parser = argparse.ArgumentParser(description="Preprocess combined audio files")
+    parser.add_argument("--data_dir", type=str, default=str(COMBINED_AUDIO_DIR),
+                        help="Directory containing class-subfolder .wav files")
+    parser.add_argument("--labels_csv", type=str, default=str(COMBINED_LABELS),
+                        help="Combined labels.csv path")
+    parser.add_argument("--output_dir", type=str, default=str(PROCESSED_AUDIO_DIR),
+                        help="Directory for preprocessed .wav files")
+    args = parser.parse_args()
+
+    labels_file = args.labels_csv
+    audio_dir = args.data_dir
+    output_dir = args.output_dir
+
     if not os.path.exists(audio_dir):
         print(f"Audio directory not found: {audio_dir}")
         return

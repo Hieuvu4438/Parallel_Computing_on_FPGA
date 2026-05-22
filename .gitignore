@@ -4,7 +4,6 @@
 build/
 CMakeCache.txt
 CMakeFiles/
-Makefile
 *.cmake
 install/
 bin/
@@ -63,9 +62,14 @@ datasets/
 *.jpeg
 *.wav
 *.mp3
+!docs/
 !docs/assets/
+!docs/assets/**
 !Paper/
+!Paper/**
+!scripts/
 !scripts/output_nn_images/
+!scripts/output_nn_images/**
 
 # ==========================================================
 # Model Outputs & Quantization Results
@@ -93,7 +97,10 @@ fpga/vitis_ai_flow/quantize_result/
 # Logs & Artifacts
 # ==========================================================
 *.log
-artifacts/
+artifacts/**
+!artifacts/
+!artifacts/**/
+!artifacts/**/.gitkeep
 phase*.txt
 
 # ==========================================================

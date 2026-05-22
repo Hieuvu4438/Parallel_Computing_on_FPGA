@@ -45,6 +45,14 @@ from pathlib import Path
 from collections import Counter
 from datetime import datetime
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from python.common.paths import (
+    ARTIFACTS_DIR,
+    COMBINED_AUDIO_DIR,
+    ICBHI_DIR,
+    ICBHI_LABELS,
+)
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -920,16 +928,7 @@ def run_qat_distillation(args):
 # ==============================================================================
 # CLI
 # ==============================================================================
-def get_project_root():
-    if os.path.isdir('/workspace/Parallel_Computing_on_FPGA'):
-        return '/workspace/Parallel_Computing_on_FPGA'
-    if os.path.isfile('/workspace/CMakeLists.txt'):
-        return '/workspace'
-    return '/home/iec/Parallel_Computing_on_FPGA'
-
-
 def parse_args():
-    root = get_project_root()
     parser = argparse.ArgumentParser(
         description='QAT Distillation v3 — MobileNetV2 INT8 for Ultra96-V2 DPU B4096',
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -953,20 +952,17 @@ Usage (inside Vitis AI 3.5 Docker):
     parser.add_argument('--mode', type=str, required=True,
                         choices=['qat', 'test', 'full'],
                         help='qat=train only, test=eval+deploy, full=qat→test→deploy')
-    parser.add_argument('--student_ckpt', type=str,
-                        default=os.path.join(root,
-                            'python/output_distillation_v2/checkpoints/student_fold_0_best.pt'),
+    parser.add_argument('--artifact_root', type=str, default=str(ARTIFACTS_DIR),
+                        help='Root artifacts directory for default inputs/outputs')
+    parser.add_argument('--student_ckpt', type=str, default=None,
                         help='FP32 Student checkpoint (default: fold 0 best)')
-    parser.add_argument('--teacher_dir', type=str,
-                        default=os.path.join(root,
-                            'python/output_distillation_v2/checkpoints'),
+    parser.add_argument('--teacher_dir', type=str, default=None,
                         help='Directory with teacher checkpoint files')
     parser.add_argument('--fold_id', type=int, default=0,
                         help='Fold ID for teacher models (default: 0)')
     parser.add_argument('--n_teachers', type=int, default=3,
                         help='Number of teacher models in ensemble')
-    parser.add_argument('--output_dir', type=str,
-                        default=os.path.join(root, 'quantize_qat_v3_result'),
+    parser.add_argument('--output_dir', type=str, default=None,
                         help='Output directory')
     parser.add_argument('--target', type=str, default='DPUCZDX8G_ISA1_B4096',
                         help='DPU target (default: B4096 for Ultra96-V2)')
@@ -983,14 +979,10 @@ Usage (inside Vitis AI 3.5 Docker):
     data_group = parser.add_argument_group('Data Source')
     data_group.add_argument('--use_wav', action='store_true', default=False,
                             help='On-the-fly WAV processing')
-    data_group.add_argument('--calib_dir', type=str,
-                            default=os.path.join(root, 'data/calib_data'))
-    data_group.add_argument('--icbhi_dir', type=str,
-                            default=os.path.join(root, 'data/samples/ICBHI_final_database'))
-    data_group.add_argument('--icbhi_labels', type=str,
-                            default=os.path.join(root, 'data/samples/labels.txt'))
-    data_group.add_argument('--combined_dir', type=str,
-                            default=os.path.join(root, 'data/combined/audio'))
+    data_group.add_argument('--calib_dir', type=str, default=None)
+    data_group.add_argument('--icbhi_dir', type=str, default=str(ICBHI_DIR))
+    data_group.add_argument('--icbhi_labels', type=str, default=str(ICBHI_LABELS))
+    data_group.add_argument('--combined_dir', type=str, default=str(COMBINED_AUDIO_DIR))
 
     # Flags
     parser.add_argument('--enable_cle', action='store_true', default=True)
@@ -998,7 +990,18 @@ Usage (inside Vitis AI 3.5 Docker):
     parser.add_argument('--deploy', action='store_true', default=False,
                         help='Export .xmodel for DPU')
 
-    return parser.parse_args()
+    args = parser.parse_args()
+    artifact_root = Path(args.artifact_root)
+    distill_dir = artifact_root / 'training' / 'distillation_v2'
+    if args.student_ckpt is None:
+        args.student_ckpt = str(distill_dir / 'checkpoints' / 'student_fold_0_best.pt')
+    if args.teacher_dir is None:
+        args.teacher_dir = str(distill_dir / 'checkpoints')
+    if args.output_dir is None:
+        args.output_dir = str(artifact_root / 'quantization' / 'vitis_qat_v3')
+    if args.calib_dir is None:
+        args.calib_dir = str(artifact_root / 'quantization' / 'calibration_data')
+    return args
 
 
 def main():

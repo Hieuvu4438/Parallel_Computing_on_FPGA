@@ -205,18 +205,18 @@ Phase 3 — Polish (1 ngày)
 ## Các File Cần Chỉnh Sửa
 
 ### [MODIFY] Paper Sections
-- [main.tex](file:///home/iec/Parallel_Computing_on_FPGA/Paper/Parallel_Computing_on_FPGA___IEEE_Journal_of_Selected_Topics_in_Signal_Processing/main.tex) — Abstract, keywords
-- [01_introduction.tex](file:///home/iec/Parallel_Computing_on_FPGA/Paper/Parallel_Computing_on_FPGA___IEEE_Journal_of_Selected_Topics_in_Signal_Processing/sections/01_introduction.tex) — Đổi 5-class → 3-class contributions
-- [03_methodology.tex](file:///home/iec/Parallel_Computing_on_FPGA/Paper/Parallel_Computing_on_FPGA___IEEE_Journal_of_Selected_Topics_in_Signal_Processing/sections/03_methodology.tex) — Thêm KD details, QAT section, fix BPF inconsistency
-- [04_experiments.tex](file:///home/iec/Parallel_Computing_on_FPGA/Paper/Parallel_Computing_on_FPGA___IEEE_Journal_of_Selected_Topics_in_Signal_Processing/sections/04_experiments.tex) — Điền kết quả thực
-- [05_conclusion.tex](file:///home/iec/Parallel_Computing_on_FPGA/Paper/Parallel_Computing_on_FPGA___IEEE_Journal_of_Selected_Topics_in_Signal_Processing/sections/05_conclusion.tex) — Sửa 5-class → 3-class
+- [main.tex](../Paper/Parallel_Computing_on_FPGA___IEEE_Journal_of_Selected_Topics_in_Signal_Processing/main.tex) — Abstract, keywords
+- [01_introduction.tex](../Paper/Parallel_Computing_on_FPGA___IEEE_Journal_of_Selected_Topics_in_Signal_Processing/sections/01_introduction.tex) — Đổi 5-class → 3-class contributions
+- [03_methodology.tex](../Paper/Parallel_Computing_on_FPGA___IEEE_Journal_of_Selected_Topics_in_Signal_Processing/sections/03_methodology.tex) — Thêm KD details, QAT section, fix BPF inconsistency
+- [04_experiments.tex](../Paper/Parallel_Computing_on_FPGA___IEEE_Journal_of_Selected_Topics_in_Signal_Processing/sections/04_experiments.tex) — Điền kết quả thực
+- [05_conclusion.tex](../Paper/Parallel_Computing_on_FPGA___IEEE_Journal_of_Selected_Topics_in_Signal_Processing/sections/05_conclusion.tex) — Sửa 5-class → 3-class
 
 ### [MODIFY] Tables
-- [table_4.tex](file:///home/iec/Parallel_Computing_on_FPGA/Paper/Parallel_Computing_on_FPGA___IEEE_Journal_of_Selected_Topics_in_Signal_Processing/tables/table_4.tex) — Sửa label (class distribution)
-- [table_5.tex](file:///home/iec/Parallel_Computing_on_FPGA/Paper/Parallel_Computing_on_FPGA___IEEE_Journal_of_Selected_Topics_in_Signal_Processing/tables/table_5.tex) — Framework config, thêm segment duration
-- [table_6.tex](file:///home/iec/Parallel_Computing_on_FPGA/Paper/Parallel_Computing_on_FPGA___IEEE_Journal_of_Selected_Topics_in_Signal_Processing/tables/table_6.tex) — Loại bỏ ShuffleNetV1, sửa params
-- [table_7.tex](file:///home/iec/Parallel_Computing_on_FPGA/Paper/Parallel_Computing_on_FPGA___IEEE_Journal_of_Selected_Topics_in_Signal_Processing/tables/table_7.tex) — **Điền kết quả thực**
-- [table_9.tex](file:///home/iec/Parallel_Computing_on_FPGA/Paper/Parallel_Computing_on_FPGA___IEEE_Journal_of_Selected_Topics_in_Signal_Processing/tables/table_9.tex) — Kiểm tra trạng thái
+- [table_4.tex](../Paper/Parallel_Computing_on_FPGA___IEEE_Journal_of_Selected_Topics_in_Signal_Processing/tables/table_4.tex) — Sửa label (class distribution)
+- [table_5.tex](../Paper/Parallel_Computing_on_FPGA___IEEE_Journal_of_Selected_Topics_in_Signal_Processing/tables/table_5.tex) — Framework config, thêm segment duration
+- [table_6.tex](../Paper/Parallel_Computing_on_FPGA___IEEE_Journal_of_Selected_Topics_in_Signal_Processing/tables/table_6.tex) — Loại bỏ ShuffleNetV1, sửa params
+- [table_7.tex](../Paper/Parallel_Computing_on_FPGA___IEEE_Journal_of_Selected_Topics_in_Signal_Processing/tables/table_7.tex) — **Điền kết quả thực**
+- [table_9.tex](../Paper/Parallel_Computing_on_FPGA___IEEE_Journal_of_Selected_Topics_in_Signal_Processing/tables/table_9.tex) — Kiểm tra trạng thái
 
 ### [NEW] (Có thể thêm)
 - `tables/table_qat.tex` — Bảng kết quả QAT FP32 vs INT8

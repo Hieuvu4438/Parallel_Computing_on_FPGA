@@ -37,6 +37,14 @@ except ImportError:
     print("ERROR: scipy is required. Install with: pip install scipy")
     sys.exit(1)
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from python.common.paths import (
+    ARTIFACTS_DIR,
+    COMBINED_AUDIO_DIR,
+    ICBHI_DIR,
+    ICBHI_LABELS,
+)
+
 try:
     import librosa
     HAS_LIBROSA = True
@@ -269,38 +277,30 @@ def load_combined_samples(combined_dir):
 # ==============================================================================
 # MAIN: GENERATE CALIBRATION DATA
 # ==============================================================================
-def get_project_root():
-    """Detect project root: /workspace (Docker) or /home/iec/... (host)."""
-    if os.path.isfile('/workspace/CMakeLists.txt') and not os.path.isdir('/workspace/Parallel_Computing_on_FPGA'):
-        return '/workspace'
-    if os.path.isdir('/workspace/Parallel_Computing_on_FPGA'):
-        return '/workspace/Parallel_Computing_on_FPGA'
-    return '/home/iec/Parallel_Computing_on_FPGA'
-
-
 def main():
-    project_root = get_project_root()
-
     parser = argparse.ArgumentParser(
         description='Generate calibration dataset for Vitis AI quantization'
     )
     parser.add_argument('--icbhi_dir', type=str,
-                        default=os.path.join(project_root, 'data/samples/ICBHI_final_database'),
+                        default=str(ICBHI_DIR),
                         help='Path to ICBHI WAV directory')
     parser.add_argument('--icbhi_labels', type=str,
-                        default=os.path.join(project_root, 'data/samples/labels.txt'),
+                        default=str(ICBHI_LABELS),
                         help='Path to ICBHI labels.txt')
     parser.add_argument('--combined_dir', type=str,
-                        default=os.path.join(project_root, 'data/combined/audio'),
+                        default=str(COMBINED_AUDIO_DIR),
                         help='Path to combined audio directory')
-    parser.add_argument('--output_dir', type=str,
-                        default=os.path.join(project_root, 'data/calib_data'),
+    parser.add_argument('--output_dir', type=str, default=None,
                         help='Output directory for calibration data')
+    parser.add_argument('--artifact_root', type=str, default=str(ARTIFACTS_DIR),
+                        help='Root artifacts directory used when --output_dir is omitted')
     parser.add_argument('--num_per_class', type=int, default=100,
                         help='Number of samples per class (default: 100)')
     parser.add_argument('--seed', type=int, default=42,
                         help='Random seed for reproducibility')
     args = parser.parse_args()
+    if args.output_dir is None:
+        args.output_dir = str(Path(args.artifact_root) / 'quantization' / 'calibration_data')
 
     np.random.seed(args.seed)
 

@@ -64,12 +64,8 @@ IMG_SIZE = 224
 TARGET_SR = 4000
 WAVELET_NAME = 'morl'  # Morlet wavelet
 NUM_SCALES = 128
-<<<<<<< HEAD
-FREQUENCY_RANGE = (50, 2000)
-=======
 # Focus on COPD/wheeze frequency band (50–1500 Hz)
 FREQUENCY_RANGE = (50, 1500)
->>>>>>> latex
 
 # Binary classification: COPD (1) vs Non-COPD (0)
 NUM_CLASSES = 2
@@ -78,37 +74,6 @@ CLASS_NAMES = ['Non-COPD', 'COPD']
 # ICBHI Patient Diagnosis Mapping (based on official dataset)
 # Source: ICBHI 2017 Challenge demographic file
 PATIENT_DIAGNOSIS = {
-<<<<<<< HEAD
-    # COPD patients (Class 1)
-    101: 'COPD', 102: 'COPD', 103: 'COPD', 104: 'COPD', 105: 'COPD',
-    106: 'COPD', 107: 'COPD', 108: 'COPD', 109: 'COPD', 110: 'COPD',
-    111: 'COPD', 112: 'COPD', 113: 'COPD', 114: 'COPD', 115: 'COPD',
-    116: 'COPD', 117: 'COPD', 118: 'COPD', 119: 'COPD', 120: 'COPD',
-    121: 'COPD', 122: 'COPD', 123: 'COPD', 124: 'COPD', 125: 'COPD',
-    126: 'COPD', 127: 'COPD', 128: 'COPD', 129: 'COPD', 130: 'COPD',
-    131: 'COPD', 132: 'COPD', 133: 'COPD', 134: 'COPD', 135: 'COPD',
-    136: 'COPD', 137: 'COPD', 138: 'COPD', 139: 'COPD', 140: 'COPD',
-    141: 'COPD', 142: 'COPD', 143: 'COPD', 144: 'COPD', 145: 'COPD',
-    146: 'COPD', 147: 'COPD', 148: 'COPD', 149: 'COPD', 150: 'COPD',
-    151: 'COPD', 152: 'COPD', 153: 'COPD', 154: 'COPD', 155: 'COPD',
-    156: 'COPD', 157: 'COPD', 158: 'COPD', 159: 'COPD', 160: 'COPD',
-    161: 'COPD', 162: 'COPD', 163: 'COPD', 164: 'COPD', 165: 'COPD',
-    166: 'COPD', 167: 'COPD', 168: 'COPD', 169: 'COPD', 170: 'COPD',
-    171: 'COPD', 172: 'COPD', 173: 'COPD', 174: 'COPD', 175: 'COPD',
-    176: 'COPD', 177: 'COPD', 178: 'COPD', 179: 'COPD', 180: 'COPD',
-    181: 'COPD', 182: 'COPD', 183: 'COPD', 184: 'COPD', 185: 'COPD',
-    186: 'COPD', 187: 'COPD', 188: 'COPD', 189: 'COPD', 190: 'COPD',
-    # Non-COPD patients (Class 0) - Healthy, URTI, Pneumonia, Bronchiectasis
-    191: 'Healthy', 192: 'Healthy', 193: 'Healthy', 194: 'Healthy',
-    195: 'Pneumonia', 196: 'Pneumonia', 197: 'URTI', 198: 'URTI',
-    199: 'Bronchiectasis', 200: 'Bronchiectasis', 201: 'Healthy',
-    202: 'Pneumonia', 203: 'URTI', 204: 'Bronchiectasis', 205: 'Healthy',
-    206: 'Pneumonia', 207: 'URTI', 208: 'Healthy', 209: 'Healthy',
-    210: 'Pneumonia', 211: 'URTI', 212: 'Bronchiectasis', 213: 'Healthy',
-    214: 'Pneumonia', 215: 'Healthy', 216: 'URTI', 217: 'Healthy',
-    218: 'Pneumonia', 219: 'Bronchiectasis', 220: 'Healthy', 221: 'URTI',
-    222: 'Pneumonia', 223: 'Healthy', 224: 'Healthy', 225: 'Healthy',
-=======
     101: 'URTI', 102: 'Healthy', 103: 'Asthma', 104: 'COPD', 105: 'URTI',
     106: 'COPD', 107: 'COPD', 108: 'LRTI', 109: 'COPD', 110: 'COPD',
     111: 'Bronchiectasis', 112: 'COPD', 113: 'COPD', 114: 'COPD', 115: 'LRTI',
@@ -134,7 +99,6 @@ PATIENT_DIAGNOSIS = {
     211: 'COPD', 212: 'COPD', 213: 'COPD', 214: 'Healthy', 215: 'Bronchiectasis',
     216: 'Bronchiolitis', 217: 'Healthy', 218: 'COPD', 219: 'Pneumonia', 220: 'COPD',
     221: 'COPD', 222: 'COPD', 223: 'COPD', 224: 'Healthy', 225: 'Healthy',
->>>>>>> latex
     226: 'Pneumonia',
 }
 
@@ -516,18 +480,11 @@ def validate(model, dataloader, criterion, device):
 
 
 def compute_metrics(y_true, y_pred):
-<<<<<<< HEAD
-    """Compute Accuracy, F1, Sensitivity, Specificity."""
-    metrics = {}
-    metrics['accuracy'] = accuracy_score(y_true, y_pred)
-    metrics['f1_macro'] = f1_score(y_true, y_pred, average='macro')
-=======
     """Compute Accuracy, Macro F1, Sensitivity (COPD), Specificity (Non-COPD), Precision."""
     metrics = {}
     metrics['accuracy'] = accuracy_score(y_true, y_pred)
     metrics['f1_macro'] = f1_score(y_true, y_pred, average='macro')
     metrics['precision'] = precision_score(y_true, y_pred, average='macro', zero_division=0)
->>>>>>> latex
     
     cm = confusion_matrix(y_true, y_pred)
     
@@ -548,18 +505,6 @@ def compute_metrics(y_true, y_pred):
 
 
 def print_metrics(metrics):
-<<<<<<< HEAD
-    print("\n" + "="*60)
-    print("EVALUATION METRICS")
-    print("="*60)
-    print(f"Accuracy:    {metrics['accuracy']*100:.2f}%")
-    print(f"F1-Score:    {metrics['f1_macro']*100:.2f}%")
-    print(f"Sensitivity: {metrics['sensitivity']*100:.2f}% (COPD detection)")
-    print(f"Specificity: {metrics['specificity']*100:.2f}% (Non-COPD detection)")
-    print("="*60)
-
-
-=======
     """Print detailed metrics table (Accuracy, Macro F1, Sensitivity, Specificity, Precision)."""
     print("\n" + "="*60)
     print("EVALUATION METRICS (Subject-Independent Test Set)")
@@ -636,7 +581,6 @@ def plot_training_history(history: Dict, save_path: str, confusion_matrix: Optio
     print(f"Training history plot saved to {save_path}")
 
 
->>>>>>> latex
 def plot_confusion_matrix(cm, save_path="confusion_matrix.png"):
     plt.figure(figsize=(8, 6))
     cm_normalized = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
@@ -787,12 +731,6 @@ def main(args):
         else:
             patience_counter += 1
     
-<<<<<<< HEAD
-    # Phase 2: Unfreeze backbone
-    model.unfreeze_backbone()
-    optimizer = optim.AdamW(model.parameters(), lr=1e-4, weight_decay=0.01)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=5)
-=======
     # Phase 2: Unfreeze backbone — reset early stopping so Phase 2 gets full chance
     model.unfreeze_backbone()
     patience_counter = 0  # Reset so Phase 2 is not stopped by Phase 1 patience
@@ -803,7 +741,6 @@ def main(args):
     scheduler = optim.lr_scheduler.CosineAnnealingLR(
         optimizer, T_max=phase2_epochs, eta_min=1e-6
     )
->>>>>>> latex
     
     for epoch in range(phase1_epochs, args.epochs):
         print(f"\nPhase 2 - Epoch {epoch+1}/{args.epochs}")
@@ -819,11 +756,7 @@ def main(args):
         print(f"Train Loss: {train_loss:.4f}, Acc: {train_acc*100:.2f}%")
         print(f"Val Loss: {val_loss:.4f}, Acc: {val_acc*100:.2f}%, F1: {val_f1*100:.2f}%")
         
-<<<<<<< HEAD
-        scheduler.step(val_f1)
-=======
         scheduler.step()  # CosineAnnealing: step each epoch
->>>>>>> latex
         
         if val_f1 > best_val_f1:
             best_val_f1 = val_f1
@@ -831,15 +764,6 @@ def main(args):
             patience_counter = 0
         else:
             patience_counter += 1
-<<<<<<< HEAD
-            if patience_counter >= patience:
-                print(f"\nEarly stopping at epoch {epoch+1}")
-                break
-    
-    # 5. Evaluation
-    print("\n[5/5] Final Evaluation...")
-    model.load_state_dict(torch.load(output_dir / "best_model.pth"))
-=======
         
         # Early stop only after Phase 2 has run at least phase2_min_epochs
         phase2_elapsed = (epoch + 1) - phase1_epochs
@@ -851,26 +775,11 @@ def main(args):
     print("\n[5/5] Final Evaluation...")
     model.load_state_dict(torch.load(output_dir / "best_model.pth", map_location=DEVICE))
     model.eval()
->>>>>>> latex
     
     _, _, _, test_preds, test_labels_arr = validate(model, test_loader, criterion, DEVICE)
     metrics = compute_metrics(test_labels_arr, test_preds)
     
     print_metrics(metrics)
-<<<<<<< HEAD
-    plot_confusion_matrix(metrics['confusion_matrix'], output_dir / "confusion_matrix.png")
-    
-    # Export ONNX
-    export_to_onnx(model, str(output_dir / "copd_classifier.onnx"))
-    
-    # Save metrics
-    with open(output_dir / "metrics.json", 'w') as f:
-        json.dump({
-            'accuracy': float(metrics['accuracy']),
-            'f1_score': float(metrics['f1_macro']),
-            'sensitivity': float(metrics['sensitivity']),
-            'specificity': float(metrics['specificity'])
-=======
     plot_training_history(history, str(output_dir / "training_results.png"),
                           confusion_matrix=metrics['confusion_matrix'])
     plot_confusion_matrix(metrics['confusion_matrix'], str(output_dir / "confusion_matrix.png"))
@@ -886,7 +795,6 @@ def main(args):
             'sensitivity': float(metrics['sensitivity']),
             'specificity': float(metrics['specificity']),
             'precision': float(metrics['precision'])
->>>>>>> latex
         }, f, indent=2)
     
     print(f"\nAll outputs saved to {output_dir}")
@@ -896,11 +804,7 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="COPD Binary Classification Training")
     parser.add_argument("--data_path", type=str, 
-<<<<<<< HEAD
-                       default="d:/PROJECTS/Parallel_Computing_on_FPGA/data/ICBHI_final_database",
-=======
                        default="/home/iec/Parallel_Computing_on_FPGA/data/samples/ICBHI_final_database",
->>>>>>> latex
                        help="Path to ICBHI database")
     parser.add_argument("--output_dir", type=str, default="./output_copd_binary",
                        help="Output directory")
