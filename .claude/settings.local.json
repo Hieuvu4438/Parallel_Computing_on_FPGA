@@ -6,7 +6,18 @@
       "Bash(command -v pdflatex)",
       "Bash(command -v xelatex)",
       "Bash(command -v latexmk)",
-      "Bash(command -v tectonic)"
+      "Bash(command -v tectonic)",
+      "Bash(python3 *)",
+      "Bash(git check-ignore *)",
+      "Bash(rg -n *)",
+      "Bash(bash *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(tmux has-session *)",
+      "Bash(tmux list-sessions *)",
+      "Bash(conda activate *)",
+      "Bash(tmux capture-pane *)"
     ]
   }
 }

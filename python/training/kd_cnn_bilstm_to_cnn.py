@@ -1768,6 +1768,8 @@ def main():
     parser.add_argument('--student_epochs', type=int, default=STUDENT_EPOCHS)
     parser.add_argument('--kd_temperature', type=float, default=KD_TEMPERATURE)
     parser.add_argument('--kd_alpha', type=float, default=KD_ALPHA)
+    parser.add_argument('--wandb', action='store_true',
+                        help='Enable W&B logging (default: enabled unless --no_wandb is specified)')
     parser.add_argument('--wandb_project', type=str, default='copd-kd-pipeline')
     parser.add_argument('--wandb_run_name', type=str, default=None)
     parser.add_argument('--no_wandb', action='store_true',
