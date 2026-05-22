@@ -38,6 +38,7 @@ artifacts/
 │   ├── mobilenetv2_3class_raw/
 │   ├── efficientnet_b0_3class/
 │   ├── distillation_v2/
+│   ├── icbhi_3class_kd/
 │   └── layer1_3/
 ├── quantization/
 │   ├── calibration_data/
@@ -74,6 +75,7 @@ make wavelet
 make train-mobilenet
 make train-efficientnet
 make distill
+make train-kd-icbhi
 make calib-data
 make quantize-vitis
 ```
@@ -96,11 +98,14 @@ The main Python path is:
 3. `python/preprocessing/wavelet_transform.py`
 4. `python/training/train_mobilenetv2.py` or `python/training/train_efficientnet_b0.py`
 5. `python/training/distillation_02.py`
-6. `python/quantization/generate_calib_data.py`
-7. `python/quantization/quantize_distillation_03.py`
-8. `fpga/vitis_ai_flow/quantize.py` for the FPGA/Vitis helper flow
+6. `python/training/kd_icbhi_3class.py` for the ICBHI-only 3-class teacher-ensemble KD path
+7. `python/quantization/generate_calib_data.py`
+8. `python/quantization/quantize_distillation_03.py`
+9. `fpga/vitis_ai_flow/quantize.py` for the FPGA/Vitis helper flow
 
 Older experiments remain available under `python/training/experiments/legacy/` and `python/quantization/legacy/`, but they are no longer the documented main path.
+
+For the ICBHI-only COPD/Non-COPD/Healthy KD workflow, place raw files in `data/sample_01/ICBHI_final_database/` and subject diagnosis labels in `data/sample_01/labels.txt`, then run `make train-kd-icbhi`. The script maps subject diagnoses to 3 classes and writes checkpoints, soft labels and metrics to `artifacts/training/icbhi_3class_kd/`. See `docs/ICBHI_3CLASS_KD_PIPELINE.md` for the training design, metrics, KD formulas and WandB logging details.
 
 ## Notes
 

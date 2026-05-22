@@ -17,6 +17,7 @@ python/
 │   ├── train_mobilenetv2.py             # Active MobileNetV2 3-class training
 │   ├── train_efficientnet_b0.py         # Active EfficientNet-B0 baseline
 │   ├── distillation_02.py               # Active teacher-student distillation
+│   ├── kd_icbhi_3class.py               # ICBHI-only 3-class teacher-ensemble KD
 │   └── experiments/legacy/              # Older CNN/MobileNet experiments
 ├── quantization/
 │   ├── generate_calib_data.py           # Active calibration data generator
@@ -32,6 +33,8 @@ python/
 Default inputs:
 
 ```text
+data/sample_01/ICBHI_final_database/
+data/sample_01/labels.txt
 data/samples/ICBHI_final_database/
 data/samples/labels.txt
 data/samples_02/
@@ -45,6 +48,7 @@ Default generated outputs:
 artifacts/training/mobilenetv2_3class_raw/
 artifacts/training/efficientnet_b0_3class/
 artifacts/training/distillation_v2/
+artifacts/training/icbhi_3class_kd/
 artifacts/training/layer1_3/
 artifacts/quantization/calibration_data/
 artifacts/quantization/vitis_qat_v3/
@@ -73,12 +77,18 @@ python3 python/training/train_efficientnet_b0.py \
   --artifact_root artifacts/training
 python3 python/training/distillation_02.py \
   --artifact_root artifacts/training
+python3 python/training/kd_icbhi_3class.py \
+  --stage all \
+  --artifact_root artifacts \
+  --wandb
 
 python3 python/quantization/generate_calib_data.py \
   --artifact_root artifacts
 python3 python/quantization/quantize_distillation_03.py \
   --artifact_root artifacts
 ```
+
+The detailed ICBHI 3-class KD design is documented in `../docs/ICBHI_3CLASS_KD_PIPELINE.md`.
 
 Equivalent Make targets are available from the repository root:
 
@@ -89,6 +99,7 @@ make wavelet
 make train-mobilenet
 make train-efficientnet
 make distill
+make train-kd-icbhi
 make calib-data
 make quantize-vitis
 ```

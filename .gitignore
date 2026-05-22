@@ -38,6 +38,11 @@ my_venv/
 # Data, Models & Large Assets
 # ==========================================================
 data/
+!data/
+data/*
+!data/sample_01/
+data/sample_01/*
+!data/sample_01/labels.txt
 datasets/
 *.csv
 *.zip

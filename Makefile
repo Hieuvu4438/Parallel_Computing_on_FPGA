@@ -6,14 +6,16 @@ TRAINING_ARTIFACTS ?= $(ARTIFACT_ROOT)/training
 QUANTIZATION_ARTIFACTS ?= $(ARTIFACT_ROOT)/quantization
 COMPILE_ARTIFACTS ?= $(ARTIFACT_ROOT)/compile
 PAPER_FIGURES ?= $(ARTIFACT_ROOT)/paper_figures
+WANDB ?= --wandb
 CMAKE_BUILD_DIR ?= $(COMPILE_ARTIFACTS)/cmake-$(BUILD_TYPE)
 
 PY_FILES := $(shell find python fpga -name '*.py' -type f | sort)
 
 .PHONY: help dirs build build-debug build-release test test-cpp run py-compile \
 	preprocess-combined preprocess-audio wavelet train train-mobilenet \
-	train-efficientnet distill calib-data quantize quantize-vitis \
-	quantize-flow plot-signal plot-kd plot-teacher-student plot-all clean-compile
+	train-efficientnet distill train-kd-bilstm train-kd-icbhi train-kd-teachers train-kd-students \
+	calib-data quantize quantize-vitis quantize-flow plot-signal plot-kd \
+	plot-teacher-student plot-all clean-compile
 
 help:
 	@printf "Respiratory Sound Analysis runner\n\n"
@@ -30,7 +32,12 @@ help:
 	@printf "  make wavelet            Generate CWT spectrograms\n"
 	@printf "  make train-mobilenet    Train MobileNetV2 into artifacts/training\n"
 	@printf "  make train-efficientnet Train EfficientNet-B0 into artifacts/training\n"
-	@printf "  make distill            Run teacher-student distillation\n"
+	@printf "  make distill            Run legacy active distillation pipeline\n"
+	@printf "  make train-kd-bilstm    Run CNN-BiLSTM → CNN6 KD pipeline (ICBHI 2017)\n"
+	@printf "  make train-kd-icbhi     Train ICBHI 3-class teacher ensemble + CNN student\n"
+	@printf "  make train-kd-teachers  Train only ICBHI 3-class teacher ensemble\n"
+	@printf "  make train-kd-students  Train only ICBHI 3-class KD students\n"
+	@printf "                         KD targets use WandB by default; disable with WANDB=\n"
 	@printf "  make calib-data         Generate calibration data\n"
 	@printf "  make quantize-vitis     Run active Vitis QAT quantization\n"
 	@printf "  make quantize-flow      Run fpga/vitis_ai_flow quantizer\n\n"
@@ -83,6 +90,18 @@ train-efficientnet:
 
 distill:
 	$(PYTHON) python/training/distillation_02.py --artifact_root "$(TRAINING_ARTIFACTS)"
+
+train-kd-bilstm:
+	$(PYTHON) python/training/kd_cnn_bilstm_to_cnn.py --artifact_root "$(TRAINING_ARTIFACTS)" $(WANDB)
+
+train-kd-icbhi:
+	$(PYTHON) python/training/kd_icbhi_3class.py --stage all --artifact_root "$(ARTIFACT_ROOT)" $(WANDB)
+
+train-kd-teachers:
+	$(PYTHON) python/training/kd_icbhi_3class.py --stage teachers --artifact_root "$(ARTIFACT_ROOT)" $(WANDB)
+
+train-kd-students:
+	$(PYTHON) python/training/kd_icbhi_3class.py --stage students --artifact_root "$(ARTIFACT_ROOT)" $(WANDB)
 
 calib-data:
 	$(PYTHON) python/quantization/generate_calib_data.py --artifact_root "$(ARTIFACT_ROOT)"
