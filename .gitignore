@@ -102,6 +102,7 @@ fpga/vitis_ai_flow/quantize_result/
 # Logs & Artifacts
 # ==========================================================
 *.log
+wandb/
 artifacts/**
 !artifacts/
 !artifacts/**/
