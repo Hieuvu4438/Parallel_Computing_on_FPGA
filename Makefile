@@ -13,7 +13,7 @@ PY_FILES := $(shell find python fpga -name '*.py' -type f | sort)
 
 .PHONY: help dirs build build-debug build-release test test-cpp run py-compile \
 	preprocess-combined preprocess-audio wavelet train train-mobilenet \
-	train-efficientnet distill train-kd-bilstm train-kd-icbhi train-kd-teachers train-kd-students \
+	train-efficientnet distill train-kd-bilstm train-kd-icbhi train-kd-icbhi-effnet train-kd-teachers train-kd-students \
 	calib-data quantize quantize-vitis quantize-flow plot-signal plot-kd \
 	plot-teacher-student plot-all clean-compile
 
@@ -35,6 +35,7 @@ help:
 	@printf "  make distill            Run legacy active distillation pipeline\n"
 	@printf "  make train-kd-bilstm    Run CNN-BiLSTM → CNN6 KD pipeline (ICBHI 2017)\n"
 	@printf "  make train-kd-icbhi     Train ICBHI 3-class teacher ensemble + CNN student\n"
+	@printf "  make train-kd-icbhi-effnet Train ICBHI 3-class disease EfficientNet-B0\n"
 	@printf "  make train-kd-teachers  Train only ICBHI 3-class teacher ensemble\n"
 	@printf "  make train-kd-students  Train only ICBHI 3-class KD students\n"
 	@printf "                         KD targets use WandB by default; disable with WANDB=\n"
@@ -96,6 +97,9 @@ train-kd-bilstm:
 
 train-kd-icbhi:
 	$(PYTHON) python/training/kd_icbhi_3class.py --stage all --artifact_root "$(ARTIFACT_ROOT)" $(WANDB)
+
+train-kd-icbhi-effnet:
+	$(PYTHON) python/training/kd_icbhi_4class_efficientnet.py --artifact_root "$(ARTIFACT_ROOT)" $(WANDB)
 
 train-kd-teachers:
 	$(PYTHON) python/training/kd_icbhi_3class.py --stage teachers --artifact_root "$(ARTIFACT_ROOT)" $(WANDB)

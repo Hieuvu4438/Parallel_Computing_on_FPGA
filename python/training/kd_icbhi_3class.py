@@ -28,7 +28,7 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 from sklearn.model_selection import train_test_split
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, WeightedRandomSampler
 
 try:
     import wandb
@@ -90,6 +90,31 @@ class StudentCNN6(nn.Module):
             nn.AdaptiveAvgPool2d((1, 1)),
         )
         self.classifier = nn.Sequential(nn.Flatten(), nn.Dropout(dropout), nn.Linear(64, num_classes))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.classifier(self.features(x))
+
+
+class WideCNN6Student(nn.Module):
+    def __init__(self, num_classes: int = 3, dropout: float = 0.3) -> None:
+        super().__init__()
+        channels = [16, 32, 64, 128, 128, 128]
+        layers: list[nn.Module] = []
+        in_channels = 1
+        for block_idx, out_channels in enumerate(channels):
+            layers.append(ConvBlock(in_channels, out_channels))
+            if block_idx < len(channels) - 1:
+                layers.append(nn.MaxPool2d(2))
+            in_channels = out_channels
+        layers.append(nn.AdaptiveAvgPool2d((1, 1)))
+        self.features = nn.Sequential(*layers)
+        self.classifier = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(channels[-1], 64),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout),
+            nn.Linear(64, num_classes),
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.classifier(self.features(x))
@@ -588,6 +613,7 @@ def stratified_split(subjects: list[str], labels: list[int], test_size: float, s
     return sorted(left), sorted(right)
 
 
+
 def flatten_subject_records(subjects: Iterable[str], subject_to_records: dict[str, list[CycleRecord]]) -> list[CycleRecord]:
     records: list[CycleRecord] = []
     for subject in subjects:
@@ -642,9 +668,52 @@ def class_weights(records: list[CycleRecord], device: torch.device) -> torch.Ten
     return torch.tensor(weights, dtype=torch.float32, device=device)
 
 
+def sample_weights(records: list[CycleRecord]) -> torch.Tensor:
+    counts = np.bincount([record.label_idx for record in records], minlength=len(CLASS_NAMES)).astype(np.float64)
+    weights = counts.sum() / np.maximum(counts * len(CLASS_NAMES), 1.0)
+    return torch.tensor([weights[record.label_idx] for record in records], dtype=torch.double)
+
+
+class FocalLoss(nn.Module):
+    def __init__(self, alpha: torch.Tensor | None = None, gamma: float = 2.0, label_smoothing: float = 0.0) -> None:
+        super().__init__()
+        self.alpha = alpha
+        self.gamma = gamma
+        self.label_smoothing = label_smoothing
+
+    def forward(self, logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        num_classes = logits.size(1)
+        if self.label_smoothing > 0:
+            target_probs = torch.full_like(logits, self.label_smoothing / max(num_classes - 1, 1))
+            target_probs.scatter_(1, targets.unsqueeze(1), 1.0 - self.label_smoothing)
+        else:
+            target_probs = F.one_hot(targets, num_classes=num_classes).float()
+        log_probs = F.log_softmax(logits, dim=1)
+        probs = log_probs.exp()
+        loss = -((1.0 - probs) ** self.gamma) * target_probs * log_probs
+        if self.alpha is not None:
+            loss = loss * self.alpha.to(logits.device).view(1, -1)
+        return loss.sum(dim=1).mean()
+
+
+def make_hard_criterion(records: list[CycleRecord], args: argparse.Namespace, device: torch.device) -> nn.Module:
+    weights = class_weights(records, device)
+    if args.hard_loss == "focal":
+        return FocalLoss(alpha=weights, gamma=args.focal_gamma, label_smoothing=args.label_smoothing)
+    return nn.CrossEntropyLoss(weight=weights, label_smoothing=args.label_smoothing)
+
+
+def criterion_class_weights(criterion: nn.Module) -> torch.Tensor | None:
+    if isinstance(criterion, FocalLoss):
+        return criterion.alpha
+    return getattr(criterion, "weight", None)
+
+
 def make_model(model_name: str, num_classes: int = 3) -> nn.Module:
     if model_name == "cnn6":
         return StudentCNN6(num_classes=num_classes)
+    if model_name == "cnn6_wide":
+        return WideCNN6Student(num_classes=num_classes)
     if model_name == "mobilestyle":
         return MobileStyleStudent(num_classes=num_classes)
     if model_name == "small_resnet":
@@ -654,8 +723,28 @@ def make_model(model_name: str, num_classes: int = 3) -> nn.Module:
     raise ValueError(f"Unknown model architecture: {model_name}")
 
 
-def make_loader(dataset: Dataset, batch_size: int, shuffle: bool, num_workers: int) -> DataLoader:
-    return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, pin_memory=torch.cuda.is_available())
+def make_loader(
+    dataset: Dataset,
+    batch_size: int,
+    shuffle: bool,
+    num_workers: int,
+    records: list[CycleRecord] | None = None,
+    balanced: bool = False,
+) -> DataLoader:
+    sampler = None
+    if balanced:
+        if records is None:
+            raise ValueError("Balanced sampling requires records.")
+        sampler = WeightedRandomSampler(sample_weights(records), num_samples=len(records), replacement=True)
+        shuffle = False
+    return DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        sampler=sampler,
+        num_workers=num_workers,
+        pin_memory=torch.cuda.is_available(),
+    )
 
 
 def train_supervised_model(
@@ -672,7 +761,7 @@ def train_supervised_model(
     ensure_dir(output_dir)
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=args.weight_decay)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(epochs, 1))
-    criterion = nn.CrossEntropyLoss(weight=class_weights(train_records, device))
+    criterion = make_hard_criterion(train_records, args, device)
     best_metric = -float("inf")
     best_epoch = 0
     best_metrics: dict[str, float | int | str | None] = {}
@@ -732,7 +821,7 @@ def train_student_model(
     teacher_logits_tensor = torch.tensor(teacher_logits, dtype=torch.float32, device=device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr_student, weight_decay=args.weight_decay)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(args.epochs_student, 1))
-    hard_criterion = nn.CrossEntropyLoss(weight=class_weights(train_records, device))
+    hard_criterion = make_hard_criterion(train_records, args, device)
     best_metric = -float("inf")
     best_epoch = 0
     best_metrics: dict[str, float | int | str | None] = {}
@@ -747,7 +836,7 @@ def train_student_model(
             indices = indices.to(device)
             optimizer.zero_grad(set_to_none=True)
             student_logits = model(features)
-            target_logits = select_teacher_logits(teacher_logits_tensor, indices, kd_mode)
+            target_logits = select_teacher_logits(teacher_logits_tensor, indices, kd_mode, args.temperature)
             loss = kd_loss(student_logits, target_logits, labels, hard_criterion, args)
             loss.backward()
             optimizer.step()
@@ -780,10 +869,13 @@ def train_student_model(
     return best_metrics
 
 
-def select_teacher_logits(teacher_logits: torch.Tensor, indices: torch.Tensor, kd_mode: str) -> torch.Tensor:
+def select_teacher_logits(teacher_logits: torch.Tensor, indices: torch.Tensor, kd_mode: str, temperature: float) -> torch.Tensor:
     selected = teacher_logits[:, indices, :]
     if kd_mode == "mean":
         return selected.mean(dim=0)
+    if kd_mode == "prob_mean":
+        probs = F.softmax(selected / temperature, dim=2).mean(dim=0)
+        return torch.log(probs.clamp_min(1e-8)) * temperature
     if kd_mode == "random":
         teacher_ids = torch.randint(0, selected.size(0), (selected.size(1),), device=selected.device)
         sample_ids = torch.arange(selected.size(1), device=selected.device)
@@ -801,7 +893,16 @@ def kd_loss(
     temperature = args.temperature
     teacher_probs = F.softmax(teacher_logits / temperature, dim=1)
     student_log_probs = F.log_softmax(student_logits / temperature, dim=1)
-    soft_loss = -(teacher_probs * student_log_probs).sum(dim=1).mean() * (temperature**2)
+    per_sample_soft_loss = -(teacher_probs * student_log_probs).sum(dim=1) * (temperature**2)
+    if args.weighted_soft_kd:
+        weights = criterion_class_weights(hard_criterion)
+        if weights is not None:
+            sample_weights_tensor = weights.to(student_logits.device)[hard_labels]
+            soft_loss = (per_sample_soft_loss * sample_weights_tensor).sum() / sample_weights_tensor.sum().clamp_min(1e-8)
+        else:
+            soft_loss = per_sample_soft_loss.mean()
+    else:
+        soft_loss = per_sample_soft_loss.mean()
     if args.kd_loss == "soft_only":
         return soft_loss
     hard_loss = hard_criterion(student_logits, hard_labels)
@@ -839,9 +940,13 @@ def evaluate_ensemble(
     output_dir: Path | None,
     name: str,
     temperature: float = 1.0,
+    average: str = "logits",
 ) -> dict[str, float | int | str | None]:
-    mean_logits = teacher_logits.mean(axis=0)
-    probs = softmax_np(mean_logits / temperature, axis=1)
+    if average == "probs":
+        probs = softmax_np(teacher_logits / temperature, axis=2).mean(axis=0)
+    else:
+        mean_logits = teacher_logits.mean(axis=0)
+        probs = softmax_np(mean_logits / temperature, axis=1)
     y_true = np.array([record.label_idx for record in records])
     y_pred = probs.argmax(axis=1)
     metrics = compute_metrics(y_true, y_pred, probs)
@@ -971,7 +1076,14 @@ def prepare_run(args: argparse.Namespace) -> tuple[Path, dict[str, list[CycleRec
 def train_teachers(args: argparse.Namespace, output_dir: Path, splits: dict[str, list[CycleRecord]], stats: FeatureStats, device: torch.device) -> None:
     train_dataset = create_dataset(splits["train"], args, stats, augment=True)
     val_dataset = create_dataset(splits["val"], args, stats, augment=False)
-    train_loader = make_loader(train_dataset, args.batch_size, shuffle=True, num_workers=args.num_workers)
+    train_loader = make_loader(
+        train_dataset,
+        args.batch_size,
+        shuffle=True,
+        num_workers=args.num_workers,
+        records=splits["train"],
+        balanced=args.balanced_sampler,
+    )
     val_loader = make_loader(val_dataset, args.batch_size, shuffle=False, num_workers=args.num_workers)
     seeds = parse_teacher_seeds(args.teacher_seeds, args.num_teachers)
     for seed in seeds:
@@ -1016,8 +1128,8 @@ def create_soft_labels(args: argparse.Namespace, output_dir: Path, splits: dict[
     metrics_dir = ensure_dir(output_dir / "metrics")
     val_logits = np.load(soft_dir / "teacher_logits_val.npy")
     test_logits = np.load(soft_dir / "teacher_logits_test.npy")
-    val_metrics = evaluate_ensemble(val_logits, splits["val"], output_dir, "teacher_ensemble_val", args.temperature)
-    test_metrics = evaluate_ensemble(test_logits, splits["test"], output_dir, "teacher_ensemble_test", args.temperature)
+    val_metrics = evaluate_ensemble(val_logits, splits["val"], output_dir, "teacher_ensemble_val", args.temperature, args.ensemble_average)
+    test_metrics = evaluate_ensemble(test_logits, splits["test"], output_dir, "teacher_ensemble_test", args.temperature, args.ensemble_average)
     with (metrics_dir / "teacher_ensemble_summary.json").open("w", encoding="utf-8") as handle:
         json.dump({"val": val_metrics, "test": test_metrics}, handle, indent=2)
 
@@ -1030,7 +1142,14 @@ def train_students(args: argparse.Namespace, output_dir: Path, splits: dict[str,
     teacher_logits = np.load(train_logits_path)
     train_dataset = create_dataset(splits["train"], args, stats, augment=True)
     val_dataset = create_dataset(splits["val"], args, stats, augment=False)
-    train_loader = make_loader(train_dataset, args.batch_size, shuffle=True, num_workers=args.num_workers)
+    train_loader = make_loader(
+        train_dataset,
+        args.batch_size,
+        shuffle=True,
+        num_workers=args.num_workers,
+        records=splits["train"],
+        balanced=args.balanced_sampler,
+    )
     val_loader = make_loader(val_dataset, args.batch_size, shuffle=False, num_workers=args.num_workers)
     kd_modes = [args.kd_mode] if args.kd_mode != "both" else ["mean", "random"]
     for kd_mode in kd_modes:
@@ -1049,11 +1168,15 @@ def evaluate_outputs(args: argparse.Namespace, output_dir: Path, splits: dict[st
     soft_dir = output_dir / "soft_labels"
     if (soft_dir / "teacher_logits_test.npy").exists():
         test_logits = np.load(soft_dir / "teacher_logits_test.npy")
-        evaluate_ensemble(test_logits, splits["test"], output_dir, "teacher_ensemble_test", args.temperature)
+        evaluate_ensemble(test_logits, splits["test"], output_dir, "teacher_ensemble_test", args.temperature, args.ensemble_average)
     test_dataset = create_dataset(splits["test"], args, stats, augment=False)
     test_loader = make_loader(test_dataset, args.batch_size, shuffle=False, num_workers=args.num_workers)
-    for kd_mode in ["mean", "random"]:
-        checkpoint_path = output_dir / "students" / f"{kd_mode}_teacher" / "best.pt"
+    students_dir = output_dir / "students"
+    if not students_dir.exists():
+        return
+    for student_dir in sorted(students_dir.glob("*_teacher")):
+        kd_mode = student_dir.name.removesuffix("_teacher")
+        checkpoint_path = student_dir / "best.pt"
         if not checkpoint_path.exists():
             continue
         model = load_model_checkpoint(make_model(args.student_arch, len(CLASS_NAMES)), checkpoint_path, device)
@@ -1082,13 +1205,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output_dir", type=str, default=None, help=f"Default: {ICBHI_3CLASS_KD_ARTIFACTS_DIR}")
     parser.add_argument("--stage", choices=["all", "teachers", "soft-labels", "students", "evaluate"], default="all")
     parser.add_argument("--teacher_arch", choices=["small_resnet", "efficient_cnn"], default="small_resnet")
-    parser.add_argument("--student_arch", choices=["cnn6", "mobilestyle"], default="cnn6")
+    parser.add_argument("--student_arch", choices=["cnn6", "cnn6_wide", "mobilestyle"], default="cnn6")
     parser.add_argument("--num_teachers", type=int, default=5)
     parser.add_argument("--teacher_seeds", type=str, default="1,2,3,4,5")
-    parser.add_argument("--kd_mode", choices=["mean", "random", "both"], default="both")
+    parser.add_argument("--kd_mode", choices=["mean", "prob_mean", "random", "both"], default="both")
     parser.add_argument("--kd_loss", choices=["soft_only", "mixed"], default="soft_only")
+    parser.add_argument("--hard_loss", choices=["ce", "focal"], default="ce")
+    parser.add_argument("--weighted_soft_kd", action="store_true")
     parser.add_argument("--temperature", type=float, default=2.0)
     parser.add_argument("--alpha", type=float, default=0.7)
+    parser.add_argument("--focal_gamma", type=float, default=2.0)
+    parser.add_argument("--label_smoothing", type=float, default=0.0)
+    parser.add_argument("--ensemble_average", choices=["logits", "probs"], default="logits")
     parser.add_argument("--sample_rate", type=int, default=16000)
     parser.add_argument("--duration_sec", type=float, default=8.0)
     parser.add_argument("--fallback_hop_sec", type=float, default=4.0)
@@ -1105,6 +1233,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--freq_mask", type=int, default=8)
     parser.add_argument("--time_mask", type=int, default=40)
     parser.add_argument("--batch_size", type=int, default=32)
+    parser.add_argument("--balanced_sampler", action="store_true")
     parser.add_argument("--epochs_teacher", type=int, default=100)
     parser.add_argument("--epochs_student", type=int, default=100)
     parser.add_argument("--lr_teacher", type=float, default=1e-3)
