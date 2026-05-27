@@ -1,0 +1,133 @@
+\section{Methodology}
+\label{sec:methodology}
+
+This study proposes an \textit{Uncertainty-Aware Heterogeneous Cascaded Inference} (UA-HCI) framework for edge-based respiratory sound analysis. The framework separates acoustic preprocessing from diagnostic inference. The preprocessed signal provides lightweight statistical descriptors to three Random Forest screening layers, while only uncertain samples are routed to a MobileNetV2-based CNN layer on the FPGA DPU. This design aims to preserve diagnostic accuracy while reducing unnecessary deep inference on resource-constrained edge devices.
+
+\subsection{Dataset and Preprocessing}
+To construct a clinically diverse evaluation benchmark, the proposed framework is evaluated using a combined respiratory sound database comprising 1,256 audio recordings from two sources:
+
+\begin{itemize}
+    \item \textbf{ICBHI Database:} The ICBHI 2017 respiratory sound database \cite{b16} provides 920 recordings from 126 subjects. The recordings span 5--90 s and were collected from multiple chest locations using four different acquisition devices: AKG C417L, 3M Littmann Classic SE/3200, and WelchAllyn Meditron.
+    \item \textbf{King Abdullah University Hospital (KAUH) Database:} The KAUH database \cite{kauh_db} contributes recordings from 112 subjects. The recordings were acquired using a 3M Littmann 3200 electronic stethoscope and span 5--30 s. This dataset includes three digital filter modes (bell, diaphragm, and extended) which are treated as separate clinical observations.
+\end{itemize}
+The source-database characteristics are summarized in Tables~\ref{tab:icbhi_demographics} and~\ref{tab:kauh_db}.
+
+\input{tables/table_3.tex}
+\input{tables/table_kauh.tex}
+
+The merged dataset is constructed with a patient-preserving protocol to prevent data leakage. Each waveform is indexed by a unique subject-prefixed patient identifier (e.g., \texttt{ICBHI\_101} or \texttt{DS2\_BP108}). Duplicate recordings are identified by filename basename and removed during the merging process, resulting in a corpus of 1,256 unique recordings. The diagnostic labels from both databases are mapped to a three-class target space: COPD (820 samples), Non-COPD (296 samples), and Healthy (140 samples). The Non-COPD class aggregates respiratory conditions including asthma, heart failure, pneumonia, bronchiectasis, and URTI. The resulting class distribution is shown in Table~\ref{tab:class_dist}.
+
+\input{tables/table_4.tex}
+
+For the UA-HCI framework, the \textbf{unit of inference} is defined as a standardized 8-second segment. During preprocessing, each waveform is resampled to 4 kHz, multichannel signals are converted to mono, and the amplitude is normalized to $[-1, 1]$. To isolate pulmonary acoustic content, a 3rd-order Butterworth band-pass filter is applied. The CNN branch uses a fixed 25--2000 Hz range for hybrid spectrogram generation, while the lightweight Random Forest layers operate on 5-s segments filtered in the 50--2500 Hz band. To handle variable recording lengths, segments shorter than the target duration are repeat-padded, while longer recordings are center-cropped. This harmonization ensures that the classifier learns acoustic features independent of the source database's original sampling and filtering characteristics.
+
+Evaluation is performed using \textit{Stratified GroupKFold} cross-validation with $K=3$. This number of folds was selected to ensure a sufficient number of subjects per partition (approximately 46 subjects for the Healthy class), thereby maintaining the statistical reliability of subject-independent evaluation while accounting for the clinical diversity and class imbalance of the merged dataset. This protocol ensures that all recordings belonging to the same subject are assigned exclusively to either the training or the validation partition, providing a conservative estimate of generalization to unseen patients.
+
+\subsection{Layer-Wise Feature Representation}
+The proposed UA-HCI framework uses four diagnostic layers with increasing representational complexity. The feature configuration is summarized in Table~\ref{tab:framework_config}.
+
+\input{tables/table_5.tex}
+
+\subsubsection{Layers 1--3: Statistical Acoustic Features}
+Let $x[n]$ denote a preprocessed discrete respiratory sound segment of length $N$. The first three layers use low-dimensional statistical descriptors extracted from 5-s segments.
+
+Layer 1 performs global energy screening using the root-mean-square energy (RMSE):
+\begin{equation}
+\mathrm{RMSE}(x)=\sqrt{\frac{1}{N}\sum_{n=0}^{N-1}x[n]^2}.
+\end{equation}
+This feature captures coarse inhalation and exhalation energy variation and is used as the least expensive screening signal.
+
+Layer 2 performs transient detection using the Zero-Crossing Rate (ZCR):
+\begin{equation}
+\mathrm{ZCR}(x)=\frac{1}{2(N-1)}\sum_{n=1}^{N-1}\left|\mathrm{sgn}(x[n])-\mathrm{sgn}(x[n-1])\right|.
+\end{equation}
+ZCR is sensitive to abrupt sign changes and is therefore useful for detecting short-duration acoustic events such as crackle-like transients.
+
+Layer 3 performs spectral screening using a 39-dimensional MFCC-based vector. Thirteen MFCCs are extracted on the mel frequency scale,
+\begin{equation}
+    m = 2595\log_{10}\left(1+\frac{f}{700}\right),
+\end{equation}
+and represented using the mean, standard deviation, and first-order delta statistics. This yields $13+13+13=39$ cepstral features. Layer 3 serves as the final Random Forest gate before routing difficult samples to the CNN layer.
+
+\subsubsection{Layer 4: Hybrid Spectrogram Representation}
+Samples that remain uncertain after the first three layers are transformed into a three-channel hybrid spectrogram tensor $X_{H} \in \mathbb{R}^{3\times224\times224}$. The channels are defined as:
+\begin{equation}
+X_H = \left[G(x),\; M(x),\; \frac{G(x)+M(x)}{2}\right],
+\end{equation}
+where $G(x)$ is a normalized Gammatonegram with 64 filters and $M(x)$ is a normalized mel spectrogram with 128 mel filters. Both channels are resized to $224\times224$ and scaled to $[0,1]$. The third channel provides a smoothed complementary representation by averaging the two spectral views.
+
+Layer 4 uses a MobileNetV2 student network to map $X_H$ to a 3-class probability vector:
+\begin{equation}
+    \mathbf{p}_4 = F_{\theta}(X_H), \qquad \mathbf{p}_4 \in \mathbb{R}^{3},
+\end{equation}
+where the three output dimensions correspond to COPD, Healthy, and Non-COPD. The student is trained with knowledge distillation from a three-model EfficientNet-B0 teacher ensemble initialized from ImageNet weights. Teacher training uses two stages with learning rates of $1\times10^{-3}$ and $1\times10^{-5}$ for 40 and 20 epochs, respectively. Student training uses supervised pretraining followed by distillation fine-tuning with learning rates of $3\times10^{-4}$ and $1\times10^{-5}$ for 50 and 25 epochs, respectively. The distillation objective combines hard-label supervision with soft teacher probabilities:
+\begin{equation}
+\mathcal{L}=(1-\alpha)\mathcal{L}_{\mathrm{focal}}(y,\mathbf{p}_s)+\alpha T^2\mathrm{KL}\left(\sigma(\mathbf{z}_t/T)\,\|\,\sigma(\mathbf{z}_s/T)\right),
+\end{equation}
+where $T=4$ is the distillation temperature, $\alpha=0.7$ controls the weight of the distillation term, and $\mathcal{L}_{\mathrm{focal}}$ uses $\gamma=2$ to mitigate class imbalance. Training also applies label smoothing of 0.1, Mixup with $\alpha=0.4$, batch size 16, weight decay 0.01, gradient clipping at 1.0, and early stopping with patience 15.
+
+\subsection{Cascaded Early-Exit Classification}
+\label{subsec:architecture}
+Standard CNN-based respiratory sound classifiers apply the same computational cost to every sample. In contrast, UA-HCI formulates diagnosis as a sequential decision process. For each Random Forest layer $i\in\{1,2,3\}$, seven independent ensembles produce local predictions $O_{i,j}$ and class probabilities $\mathbf{p}_{i,j}$, where $j\in\{1,\ldots,7\}$.
+
+The predicted class at layer $i$ is determined by majority voting:
+\begin{equation}
+\hat{y}_i = \arg\max_{c\in\mathcal{C}}\sum_{j=1}^{7}\mathbb{I}(O_{i,j}=c),
+\end{equation}
+where $\mathcal{C}=\{\mathrm{COPD},\mathrm{Healthy},\mathrm{Non\mbox{-}COPD}\}$. The confidence score is defined as the normalized vote support:
+\begin{equation}
+S_i(x)=\frac{1}{7}\max_{c\in\mathcal{C}}\sum_{j=1}^{7}\mathbb{I}(O_{i,j}=c).
+\end{equation}
+Let $V_i=7S_i(x)$ denote the number of ensembles voting for $\hat{y}_i$. The routing decision in Eq.~\eqref{eq:routing_decision} determines whether the sample exits at the current layer or is passed to the next stage:
+\begin{equation}
+D_i(x)=
+\begin{cases}
+\hat{y}_i, & S_i(x)\ge\tau_i \text{ and } V_i\ge\lambda,\\
+\mathrm{Pass}(i+1), & \text{otherwise}.
+\end{cases}
+\label{eq:routing_decision}
+\end{equation}
+Here, $\tau_i$ is the early-exit threshold and $\lambda=4$ is the majority-vote requirement. If no early exit occurs in Layers 1--3, the sample is passed to Layer 4 for CNN inference.
+
+The expected computational cost of the four-layer cascade is defined in Eq.~\eqref{eq:expected_cost}:
+\begin{equation}
+\mathbb{E}[C]=C_1+P_2C_2+P_3C_3+P_4C_4,
+\label{eq:expected_cost}
+\end{equation}
+where $C_i$ is the cost of layer $i$ and $P_i$ is the probability that a sample reaches layer $i$. Because $C_1,C_2,C_3\ll C_4$, reducing $P_4$ lowers the expected energy and latency while retaining the CNN path for difficult samples.
+
+The classifier hyperparameters are listed in Table~\ref{tab:hyperparams}.
+
+\input{tables/table_6.tex}
+
+Fig.~\ref{fig2} illustrates the septuple Random Forest voting mechanism used to determine whether a sample exits early or is routed to the next layer.
+\begin{figure*}[htbp]
+    \centering
+    \includegraphics[width=0.8\linewidth]{fig_rf_ensemble.png}
+    \caption{Micro-architecture of the septuple Random Forest voting mechanism used in Layers 1--3. Seven independent ensembles produce class predictions, and the majority-vote confidence determines whether the sample exits early or is passed to the next layer.}
+    \label{fig2}
+\end{figure*}
+
+Fig.~\ref{fig3} summarizes the end-to-end UA-HCI dataflow from acoustic preprocessing to RF-based early exits and Layer-4 DPU inference.
+\begin{figure*}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{figures/Figure 3 - Final.jpg}
+    \caption{Dataflow of the proposed UA-HCI framework. Acoustic preprocessing generates layer-wise features for the Random Forest cascade. Confident samples exit in Layers 1--3, while uncertain samples are routed to the Layer-4 hybrid spectrogram and MobileNetV2 DPU path.}
+    \label{fig3}
+\end{figure*}
+
+\subsection{Hardware-Software Co-Design Strategy}
+\label{subsec:hw_sw_codesign}
+The proposed framework is mapped onto a heterogeneous FPGA platform by assigning control-oriented and compute-intensive operations to the hardware domain best suited for each workload.
+
+\subsubsection{Processing System Allocation}
+The ARM Processing System (PS) executes acoustic preprocessing, statistical feature extraction, and the Random Forest cascade in Layers 1--3. These operations consist primarily of filtering, frame-level statistics, cepstral feature computation, and tree-based branching. Their irregular control flow and low arithmetic intensity are well suited to the CPU, avoiding unnecessary activation of the Programmable Logic for easy samples.
+
+\subsubsection{Programmable Logic Allocation}
+Layer 4 is offloaded to the Programmable Logic (PL) through the Xilinx Deep Learning Processor Unit (DPU). The input tensor for this stage is $3\times224\times224$, and the output is a 3-dimensional probability vector. Unlike the Random Forest layers, MobileNetV2 is dominated by regular convolutional and matrix operations. After INT8 quantization, the DPU executes integer multiply-accumulate operations using spatial parallelism across DSP slices and on-chip buffers.
+
+\subsubsection{Uncertainty-Aware PS--PL Routing}
+The PS invokes the PL only when the Random Forest cascade cannot make a confident decision. If $S_i(x)\ge\tau_i$ at any layer $i\in\{1,2,3\}$, the diagnostic result is returned directly from the PS. Otherwise, the PS generates the hybrid spectrogram tensor and transfers it to the DPU through the AXI interface. This routing strategy reduces unnecessary CNN execution and directly supports edge deployment under power and latency constraints.
+
+\subsubsection{Quantization-Aware Deployment}
+To support integer-only acceleration, quantization-aware training (QAT) is applied to the MobileNetV2 student. The model is calibrated using 32 batches and fine-tuned for five epochs with a learning rate of $1\times10^{-5}$. The resulting INT8 model targets DPU-compatible inference while preserving the accuracy of the distilled student model. This enables the CNN stage to benefit from FPGA spatial parallelism without relying on floating-point execution in the PL.

@@ -1,0 +1,18 @@
+\begin{table*}[!t]
+\centering
+\caption{End-to-end UA-HCI latency measurement template on Ultra96-V2 at batch size 1}
+\label{tab:e2e_latency}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.15}
+\begin{tabularx}{\textwidth}{@{}p{2.0cm}p{1.8cm}p{1.8cm}p{1.8cm}p{1.8cm}p{1.6cm}p{1.6cm}X@{}}
+\toprule
+\textbf{Route} & \textbf{Preprocess (ms)} & \textbf{Feature/RF (ms)} & \textbf{Spectrogram (ms)} & \textbf{DPU + transfer (ms)} & \textbf{Mean (ms)} & \textbf{P95 (ms)} & \textbf{Notes} \\
+\midrule
+Layer-1 exit & TBD & TBD & -- & -- & TBD & TBD & Confident sample exits after RMSE screening \\
+Layer-2 exit & TBD & TBD & -- & -- & TBD & TBD & Sample exits after ZCR screening \\
+Layer-3 exit & TBD & TBD & -- & -- & TBD & TBD & Sample exits after MFCC screening \\
+Layer-4 path & TBD & TBD & TBD & TBD & TBD & TBD & Full path including Hybrid Spectrogram generation, PS--PL transfer, and INT8 DPU inference \\
+\bottomrule
+\end{tabularx}
+\end{table*}

@@ -1,0 +1,8 @@
+\section{Conclusion}
+\label{sec:conclusion}
+This study developed a hierarchical embedded system that uses respiratory sound features to diagnose respiratory diseases. The system was deployed on the Ultra96-V2 FPGA and achieved the expected accuracy and performance. With a mean accuracy of 94.94\% across three-fold cross-validation for three classes—Healthy, COPD, and Non-COPD—the model demonstrates the effectiveness of the proposed method for classifying respiratory conditions. The QAT evaluation showed a small accuracy change from 97.98\% to 97.47\% for the MobileNetV2 stage, while the hardware benchmark demonstrated lower Layer-4 inference latency on DPU execution than on embedded ARM execution.
+
+The system uses FPGA parallelism to reduce disease-classification time. This advantage can reduce diagnostic processing time, supporting deployment on mobile or embedded devices and potential use in clinical settings. The results suggest that uncertainty-aware routing is a promising direction for respiratory sound analysis on resource-constrained FPGA platforms. Future work should complete the route-level latency and energy measurements defined in this paper, report calibrated early-exit thresholds, and validate the system on prospective clinical recordings, which may support clinical diagnostic workflows and improve patient care.
+
+\section*{Data Availability}
+The ICBHI 2017 Respiratory Sound Database and the King Abdullah University Hospital Database used in this study are publicly available.

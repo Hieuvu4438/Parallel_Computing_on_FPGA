@@ -1,0 +1,19 @@
+\begin{table}[htbp]
+\centering
+\caption{Inference latency comparison between CPU and FPGA DPU for the MobileNetV2 layer}
+\label{tab:perf_cpu_dpu}
+\renewcommand{\arraystretch}{1.3}
+\resizebox{\columnwidth}{!}{
+\begin{tabular}{lccc}
+\toprule
+\textbf{Hardware Platform} & \textbf{Compute Engine} & \textbf{Precision} & \textbf{Latency (ms/sample)} \\
+\midrule
+\multirow{2}{*}{PYNQ-Z2 (Zynq-7000)} & ARM Cortex-A9 (PS) & FP32 & 285.40 \\
+ & \textbf{DPU (PL)} & \textbf{INT8} & \textbf{34.60} \\
+\midrule
+\multirow{2}{*}{Ultra96-V2 (ZU3EG)} & ARM Cortex-A53 (PS) & FP32 & 112.80 \\
+ & \textbf{DPU (PL)} & \textbf{INT8} & \textbf{8.20} \\
+\bottomrule
+\end{tabular}
+}
+\end{table}

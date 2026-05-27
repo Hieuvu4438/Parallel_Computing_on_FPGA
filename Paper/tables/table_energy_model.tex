@@ -1,0 +1,19 @@
+\begin{table*}[!t]
+\centering
+\caption{Route-level energy measurement template for UA-HCI on Ultra96-V2}
+\label{tab:energy_model}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.15}
+\begin{tabularx}{\textwidth}{@{}p{2.0cm}p{1.8cm}p{1.8cm}p{1.8cm}p{1.8cm}p{1.9cm}X@{}}
+\toprule
+\textbf{Route} & \textbf{Exit probability} & \textbf{Mean latency (ms)} & \textbf{Mean power (W)} & \textbf{Energy/sample (mJ)} & \textbf{Measurement point} & \textbf{Notes} \\
+\midrule
+Layer-1 exit & TBD & TBD & TBD & TBD & PS rail / board power & No DPU activation \\
+Layer-2 exit & TBD & TBD & TBD & TBD & PS rail / board power & Includes Layer-1 and Layer-2 screening \\
+Layer-3 exit & TBD & TBD & TBD & TBD & PS rail / board power & Includes MFCC extraction and RF routing \\
+Layer-4 path & TBD & TBD & TBD & TBD & PS+PL rail / board power & Includes spectrogram generation, PS--PL transfer, and DPU inference \\
+Static CNN baseline & 1.000 & TBD & TBD & TBD & PS+PL rail / board power & Every sample is routed to the CNN/DPU path \\
+\bottomrule
+\end{tabularx}
+\end{table*}
