@@ -1,6 +1,7 @@
 # ==========================================================
 # C++ and CMake Build Files
 # ==========================================================
+.claude/settings.local.json
 build/
 CMakeCache.txt
 CMakeFiles/
@@ -154,7 +155,11 @@ package-lock.json
 # Test files
 test_api.py
 
-# Claude Code Switch & Claude local configs
+# Claude Code Switch, OpenClaude & Claude local configs
 .ccs_local/
 ccs
 claude
+openclaude
+.openclaude-profile.json
+
+ADD-RSC

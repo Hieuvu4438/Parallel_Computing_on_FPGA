@@ -17,7 +17,8 @@
       "Bash(tmux has-session *)",
       "Bash(tmux list-sessions *)",
       "Bash(conda activate *)",
-      "Bash(tmux capture-pane *)"
+      "Bash(tmux capture-pane *)",
+      "Bash(tmux ls *)"
     ]
   }
 }
