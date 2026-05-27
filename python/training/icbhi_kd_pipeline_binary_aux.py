@@ -48,14 +48,7 @@ def main():
     base.set_seed(args.seed)
     device = base.default_device(args.device)
     output_dir, splits, stats = base.prepare_run(args)
-    cn = base.get_class_names(args.num_classes)
-    print(f"Pipeline: {args.pipeline_name}", flush=True)
-    print(f"Task: {args.num_classes}-class ({', '.join(cn)})", flush=True)
-    print(f"Output: {output_dir}", flush=True)
-    print(f"Split: train={len(splits['train'])} val={len(splits['val'])} test={len(splits['test'])}", flush=True)
-    for name, records in splits.items():
-        labels = [base.get_label(r, args.num_classes) for r in records]
-        print(f"  {name}: {{" + ", ".join(f"{cn[i]}={labels.count(i)}" for i in range(args.num_classes)) + "}}", flush=True)
+    base.print_run_header(args, output_dir, splits)
 
     if args.stage in {"all", "teachers"}:
         for arch in base.parse_csv(args.teacher_arches):

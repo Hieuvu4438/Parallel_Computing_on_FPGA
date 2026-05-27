@@ -112,9 +112,11 @@ def read_cycle_annotations(wav_path: Path) -> list[tuple[float, float, int, int]
     return cycles
 
 
-def build_records(data_dir: Path, max_files: int | None = None, max_cycles: int | None = None) -> list[CycleRecord]:
+def build_records(data_dir: Path, max_files: int | None = None, max_cycles: int | None = None, allowed_basenames: set[str] | None = None) -> list[CycleRecord]:
     wavs = sorted(data_dir.glob("*.wav"))
-    if max_files is not None:
+    if allowed_basenames is not None:
+        wavs = [p for p in wavs if p.stem in allowed_basenames]
+    if max_files is not None and allowed_basenames is None:
         wavs = wavs[:max_files]
     if not wavs:
         raise FileNotFoundError(f"No .wav files found in {data_dir}")
@@ -132,6 +134,51 @@ def build_records(data_dir: Path, max_files: int | None = None, max_cycles: int 
     if not records:
         raise ValueError("No annotated cycles found")
     return records
+
+
+def record_basenames(records: list[CycleRecord]) -> set[str]:
+    return {Path(r.wav_path).stem for r in records}
+
+
+def assert_split_filename_protocol(splits: dict[str, list[CycleRecord]], allow_val_test_overlap: bool = False):
+    names = {k: record_basenames(v) for k, v in splits.items()}
+    assert names["train"].isdisjoint(names["val"]), "Train/val filename overlap detected"
+    assert names["train"].isdisjoint(names["test"]), "Train/test filename overlap detected"
+    if allow_val_test_overlap:
+        assert names["val"] == names["test"], "Expected validation split to match test split for test-selection mode"
+    else:
+        assert names["val"].isdisjoint(names["test"]), "Val/test filename overlap detected"
+
+
+def split_file_counts(splits: dict[str, list[CycleRecord]]) -> dict[str, int]:
+    return {k: len(record_basenames(v)) for k, v in splits.items()}
+
+
+def create_add_rsc_splits(data_dir: Path, args) -> dict[str, list[CycleRecord]]:
+    basenames = sorted(p.stem for p in data_dir.glob("*.wav") if p.with_suffix(".txt").exists())
+    if args.max_files is not None:
+        basenames = basenames[:args.max_files]
+    if not basenames:
+        raise FileNotFoundError(f"No paired .wav/.txt files found in {data_dir}")
+    indices = list(range(len(basenames)))
+    random.Random(args.add_rsc_split_seed).shuffle(indices)
+    n_train_pool = int(0.6 * len(indices))
+    train_pool = [basenames[i] for i in indices[:n_train_pool]]
+    test_files = [basenames[i] for i in indices[n_train_pool:]]
+    if args.add_rsc_use_test_for_selection:
+        train_files = train_pool
+        val_files = test_files
+    else:
+        n_train = int(0.8 * len(train_pool))
+        train_files = train_pool[:n_train]
+        val_files = train_pool[n_train:]
+    splits = {
+        "train": build_records(data_dir, max_cycles=args.max_cycles, allowed_basenames=set(train_files)),
+        "val": build_records(data_dir, max_cycles=args.max_cycles, allowed_basenames=set(val_files)),
+        "test": build_records(data_dir, max_cycles=args.max_cycles, allowed_basenames=set(test_files)),
+    }
+    assert_split_filename_protocol(splits, allow_val_test_overlap=args.add_rsc_use_test_for_selection)
+    return splits
 
 
 def create_official_splits(records: list[CycleRecord], nc: int, val_frac: float, seed: int) -> dict[str, list[CycleRecord]]:
@@ -157,7 +204,9 @@ def create_official_splits(records: list[CycleRecord], nc: int, val_frac: float,
         tr_s, va_s = train_test_split(subjects, test_size=val_frac, random_state=seed, stratify=strat)
     except ValueError:
         tr_s, va_s = train_test_split(subjects, test_size=val_frac, random_state=seed)
-    return {"train": [r for s in sorted(tr_s) for r in s2r[s]], "val": [r for s in sorted(va_s) for r in s2r[s]], "test": test_recs}
+    splits = {"train": [r for s in sorted(tr_s) for r in s2r[s]], "val": [r for s in sorted(va_s) for r in s2r[s]], "test": test_recs}
+    assert_split_filename_protocol(splits)
+    return splits
 
 
 def load_audio(wav_path: Path, target_sr: int, bandpass: bool, f_min: float, f_max: float):
@@ -648,18 +697,42 @@ def prepare_run(args):
     if split_path.exists() and config_path.exists() and not args.rebuild_splits:
         with config_path.open("r", encoding="utf-8") as f:
             cfg = json.load(f)
-        if cfg.get("max_files") == args.max_files and cfg.get("max_cycles") == args.max_cycles and cfg.get("num_classes") == args.num_classes and cfg.get("input_view") == args.input_view:
+        cache_matches = (
+            cfg.get("max_files") == args.max_files
+            and cfg.get("max_cycles") == args.max_cycles
+            and cfg.get("num_classes") == args.num_classes
+            and cfg.get("input_view") == args.input_view
+            and cfg.get("benchmark_protocol", "official_icbhi") == args.benchmark_protocol
+            and cfg.get("add_rsc_split_seed") == args.add_rsc_split_seed
+            and cfg.get("add_rsc_use_test_for_selection") == args.add_rsc_use_test_for_selection
+        )
+        if cache_matches:
             with split_path.open("r", encoding="utf-8") as f:
                 raw = json.load(f)
-            splits = {k: [CycleRecord(**r) for r in v] for k, v in raw.items()}
+            raw_splits = raw.get("splits", raw)
+            splits = {k: [CycleRecord(**r) for r in v] for k, v in raw_splits.items()}
+            assert_split_filename_protocol(splits, allow_val_test_overlap=args.benchmark_protocol == "add_rsc" and args.add_rsc_use_test_for_selection)
             return output_dir, splits, FeatureStats(float(cfg["feature_mean"]), float(cfg["feature_std"]))
-    records = build_records(Path(args.data_dir), args.max_files, args.max_cycles)
-    splits = create_official_splits(records, args.num_classes, args.val_size, args.seed)
+    if args.benchmark_protocol == "official_icbhi":
+        records = build_records(Path(args.data_dir), args.max_files, args.max_cycles)
+        splits = create_official_splits(records, args.num_classes, args.val_size, args.seed)
+    elif args.benchmark_protocol == "add_rsc":
+        splits = create_add_rsc_splits(Path(args.data_dir), args)
+    else:
+        raise ValueError(f"Unknown benchmark protocol: {args.benchmark_protocol}")
     stats = estimate_feature_stats(splits["train"], args)
+    split_meta = {
+        "benchmark_protocol": args.benchmark_protocol,
+        "add_rsc_split_seed": args.add_rsc_split_seed if args.benchmark_protocol == "add_rsc" else None,
+        "add_rsc_use_test_for_selection": args.add_rsc_use_test_for_selection if args.benchmark_protocol == "add_rsc" else None,
+        "file_counts": split_file_counts(splits),
+        "cycle_counts": {k: len(v) for k, v in splits.items()},
+        "filenames": {k: sorted(record_basenames(v)) for k, v in splits.items()},
+    }
     with split_path.open("w", encoding="utf-8") as f:
-        json.dump({k: [asdict(r) for r in v] for k, v in splits.items()}, f, indent=2)
+        json.dump({"metadata": split_meta, "splits": {k: [asdict(r) for r in v] for k, v in splits.items()}}, f, indent=2)
     cfg = vars(args).copy()
-    cfg.update({"feature_mean": stats.mean, "feature_std": stats.std, "split_sizes": {k: len(v) for k, v in splits.items()}})
+    cfg.update({"feature_mean": stats.mean, "feature_std": stats.std, "split_sizes": {k: len(v) for k, v in splits.items()}, "split_file_counts": split_file_counts(splits)})
     with config_path.open("w", encoding="utf-8") as f:
         json.dump(cfg, f, indent=2)
     return output_dir, splits, stats
@@ -957,6 +1030,9 @@ def parse_args():
     p.add_argument("--kd_weight", type=float, default=0.45)
     p.add_argument("--binary_weight", type=float, default=0.20)
     p.add_argument("--selection_metric", choices=["icbhi_score", "macro_f1", "balanced_accuracy", "threshold_icbhi_score"], default="threshold_icbhi_score")
+    p.add_argument("--benchmark_protocol", choices=["official_icbhi", "add_rsc"], default="add_rsc")
+    p.add_argument("--add_rsc_split_seed", type=int, default=1)
+    p.add_argument("--add_rsc_use_test_for_selection", action="store_true", default=False)
     p.add_argument("--val_size", type=float, default=0.2)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--device", default="auto")
@@ -974,19 +1050,26 @@ def parse_args():
     return p.parse_args()
 
 
+def print_run_header(args, output_dir, splits):
+    cn = get_class_names(args.num_classes)
+    print(f"Pipeline: {args.pipeline_name}", flush=True)
+    print(f"Task: {args.num_classes}-class ({', '.join(cn)})", flush=True)
+    print(f"Benchmark protocol: {args.benchmark_protocol}", flush=True)
+    print(f"Output: {output_dir}", flush=True)
+    print(f"Split: train={len(splits['train'])} val={len(splits['val'])} test={len(splits['test'])}", flush=True)
+    file_counts = split_file_counts(splits)
+    print(f"Split files: train={file_counts['train']} val={file_counts['val']} test={file_counts['test']}", flush=True)
+    for name, records in splits.items():
+        labels = [get_label(r, args.num_classes) for r in records]
+        print(f"  {name}: {{" + ", ".join(f"{cn[i]}={labels.count(i)}" for i in range(args.num_classes)) + "}}", flush=True)
+
+
 def main():
     args = parse_args()
     set_seed(args.seed)
     device = default_device(args.device)
     output_dir, splits, stats = prepare_run(args)
-    cn = get_class_names(args.num_classes)
-    print(f"Pipeline: {args.pipeline_name}", flush=True)
-    print(f"Task: {args.num_classes}-class ({', '.join(cn)})", flush=True)
-    print(f"Output: {output_dir}", flush=True)
-    print(f"Split: train={len(splits['train'])} val={len(splits['val'])} test={len(splits['test'])}", flush=True)
-    for name, records in splits.items():
-        labels = [get_label(r, args.num_classes) for r in records]
-        print(f"  {name}: {{" + ", ".join(f"{cn[i]}={labels.count(i)}" for i in range(args.num_classes)) + "}}", flush=True)
+    print_run_header(args, output_dir, splits)
 
     if args.stage in {"all", "teachers"}:
         for arch in parse_csv(args.teacher_arches):
