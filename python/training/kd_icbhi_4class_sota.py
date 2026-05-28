@@ -144,10 +144,13 @@ def build_records(
     data_dir: Path,
     max_files: int | None = None,
     max_cycles: int | None = None,
+    allowed_basenames: set[str] | None = None,
 ) -> list[CycleRecord]:
     """Build cycle-level records from ICBHI annotation files."""
     wav_files = sorted(data_dir.glob("*.wav"))
-    if max_files is not None:
+    if allowed_basenames is not None:
+        wav_files = [p for p in wav_files if p.stem in allowed_basenames]
+    if max_files is not None and allowed_basenames is None:
         wav_files = wav_files[:max_files]
     if not wav_files:
         raise FileNotFoundError(f"No .wav files found in {data_dir}")
@@ -183,8 +186,53 @@ def get_label(record: CycleRecord, num_classes: int) -> int:
 
 
 # =============================================================================
-# Official ICBHI 60/40 split
+# Split protocols and helpers
 # =============================================================================
+def record_basenames(records: list[CycleRecord]) -> set[str]:
+    return {Path(r.wav_path).name.split(".")[0] for r in records}
+
+
+def assert_split_filename_protocol(splits: dict[str, list[CycleRecord]], allow_val_test_overlap: bool = False) -> None:
+    names = {k: record_basenames(v) for k, v in splits.items()}
+    assert names["train"].isdisjoint(names["val"]), "Train/val filename overlap detected"
+    assert names["train"].isdisjoint(names["test"]), "Train/test filename overlap detected"
+    if allow_val_test_overlap:
+        assert names["val"] == names["test"], "Expected validation split to match test split for test-selection mode"
+    else:
+        assert names["val"].isdisjoint(names["test"]), "Val/test filename overlap detected"
+
+
+def split_file_counts(splits: dict[str, list[CycleRecord]]) -> dict[str, int]:
+    return {k: len(record_basenames(v)) for k, v in splits.items()}
+
+
+def create_add_rsc_splits(data_dir: Path, args: argparse.Namespace) -> dict[str, list[CycleRecord]]:
+    basenames = sorted(p.stem for p in data_dir.glob("*.wav") if p.with_suffix(".txt").exists())
+    if args.max_files is not None:
+        basenames = basenames[:args.max_files]
+    if not basenames:
+        raise FileNotFoundError(f"No paired .wav/.txt files found in {data_dir}")
+    indices = list(range(len(basenames)))
+    random.Random(args.add_rsc_split_seed).shuffle(indices)
+    n_train_pool = int(0.6 * len(indices))
+    train_pool = [basenames[i] for i in indices[:n_train_pool]]
+    test_files = [basenames[i] for i in indices[n_train_pool:]]
+    if args.add_rsc_use_test_for_selection:
+        train_files = train_pool
+        val_files = test_files
+    else:
+        n_train = int(0.8 * len(train_pool))
+        train_files = train_pool[:n_train]
+        val_files = train_pool[n_train:]
+    splits = {
+        "train": build_records(data_dir, max_cycles=args.max_cycles, allowed_basenames=set(train_files)),
+        "val": build_records(data_dir, max_cycles=args.max_cycles, allowed_basenames=set(val_files)),
+        "test": build_records(data_dir, max_cycles=args.max_cycles, allowed_basenames=set(test_files)),
+    }
+    assert_split_filename_protocol(splits, allow_val_test_overlap=args.add_rsc_use_test_for_selection)
+    return splits
+
+
 def create_official_splits(
     records: list[CycleRecord],
     num_classes: int,
@@ -200,16 +248,17 @@ def create_official_splits(
             train_records.append(record)
         elif pid in OFFICIAL_TEST_PATIENTS:
             test_records.append(record)
-        # else: skip patients not in official range
 
     # Split train → train + val (patient-wise)
     subject_to_records: dict[str, list[CycleRecord]] = {}
     subject_to_label: dict[str, int] = {}
     for record in train_records:
         subject_to_records.setdefault(record.subject_id, []).append(record)
-        subject_to_label[record.subject_id] = get_label(record, num_classes)
+        subject_to_label[record.subject_id] = max(subject_to_label.get(record.subject_id, 0), get_label(record, num_classes))
 
     subjects = sorted(subject_to_records)
+    if not subjects:
+        raise ValueError("Official train split is empty. Check data_dir/max_files.")
     labels = [subject_to_label[s] for s in subjects]
 
     # Stratified patient-wise val split
@@ -226,8 +275,9 @@ def create_official_splits(
 
     train_final = [r for s in sorted(train_subj) for r in subject_to_records[s]]
     val_final = [r for s in sorted(val_subj) for r in subject_to_records[s]]
-
-    return {"train": train_final, "val": val_final, "test": test_records}
+    splits = {"train": train_final, "val": val_final, "test": test_records}
+    assert_split_filename_protocol(splits)
+    return splits
 
 
 # =============================================================================
@@ -362,7 +412,10 @@ def apply_waveform_augmentation(
         rate = np.random.choice([0.9, 1.0, 1.1])
         if rate != 1.0:
             orig_len = len(aug)
-            aug = sp_signal.resample(aug, int(orig_len * rate)).astype(np.float32)
+            # Use fast linear interpolation instead of expensive FFT-based resample
+            x_old = np.linspace(0, 1, orig_len)
+            x_new = np.linspace(0, 1, int(orig_len * rate))
+            aug = np.interp(x_new, x_old, aug).astype(np.float32)
             if len(aug) > orig_len:
                 aug = aug[:orig_len]
             else:
@@ -448,11 +501,15 @@ class ICBHICycleDataset(Dataset):
         self.speed_perturb = speed_perturb
         self.mel_filterbank = build_mel_filterbank(sample_rate, n_fft, n_mels, f_min, f_max)
         self._audio_cache: dict[str, tuple[np.ndarray, int]] = {}
+        self._spec_cache: dict[int, tuple[torch.Tensor, torch.Tensor, torch.Tensor]] = {}
 
     def __len__(self) -> int:
         return len(self.records)
 
     def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        if not self.augment and index in self._spec_cache:
+            return self._spec_cache[index]
+
         record = self.records[index]
         waveform, sr = self._load_cached(record.wav_path)
         segment = segment_waveform(waveform, sr, record.start_sec, record.end_sec, self.target_samples)
@@ -470,7 +527,11 @@ class ICBHICycleDataset(Dataset):
             feature = (feature - self.stats.mean) / max(self.stats.std, 1e-6)
         feat_t = torch.from_numpy(feature).unsqueeze(0).float()
         label = get_label(record, self.num_classes)
-        return feat_t, torch.tensor(label, dtype=torch.long), torch.tensor(index, dtype=torch.long)
+        result = (feat_t, torch.tensor(label, dtype=torch.long), torch.tensor(index, dtype=torch.long))
+        
+        if not self.augment:
+            self._spec_cache[index] = result
+        return result
 
     def _load_cached(self, wav_path: str) -> tuple[np.ndarray, int]:
         if wav_path not in self._audio_cache:
@@ -769,6 +830,39 @@ def safe_auc(y_true: np.ndarray, y_prob: np.ndarray, num_classes: int) -> float 
         return None
 
 
+def binary_metrics_from_4class(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float]:
+    yt = (y_true != 0).astype(np.int64)
+    yp = (y_pred != 0).astype(np.int64)
+    cm = confusion_matrix(yt, yp, labels=[0, 1])
+    tn, fp, fn, tp = cm.ravel()
+    sens = tp / max(tp + fn, 1)
+    spec = tn / max(tn + fp, 1)
+    return {
+        "binary_sensitivity": float(sens),
+        "binary_specificity": float(spec),
+        "binary_icbhi_score": float((sens + spec) / 2.0),
+        "binary_accuracy": float(accuracy_score(yt, yp)),
+    }
+
+
+def threshold_predictions(probs: np.ndarray, threshold: float) -> np.ndarray:
+    preds = probs.argmax(axis=1)
+    if probs.shape[1] > 1:
+        abnormal = probs[:, 1:].argmax(axis=1) + 1
+        preds = np.where(probs[:, 0] >= threshold, 0, abnormal)
+    return preds
+
+
+def sweep_threshold(y_true: np.ndarray, probs: np.ndarray) -> dict:
+    best = {"threshold": 0.5, "icbhi_score": -1.0}
+    for th in np.linspace(0.05, 0.95, 91):
+        pred = threshold_predictions(probs, float(th))
+        m = compute_metrics(y_true, pred, probs, probs.shape[1])
+        if m["icbhi_score"] > best["icbhi_score"]:
+            best = {"threshold": float(th), **m}
+    return best
+
+
 def compute_metrics(
     y_true: np.ndarray, y_pred: np.ndarray, y_prob: np.ndarray | None, num_classes: int
 ) -> dict[str, float | int | str | None]:
@@ -793,6 +887,7 @@ def compute_metrics(
         "recall_macro": float(rec.mean()),
         "confusion_matrix": cm.tolist(),
     }
+    metrics.update(binary_metrics_from_4class(y_true, y_pred))
     if y_prob is not None:
         metrics["auc_ovr"] = safe_auc(y_true, y_prob, num_classes)
 
@@ -972,14 +1067,23 @@ def train_supervised(
             total_loss += float(loss.item()) * features.size(0)
         scheduler.step()
 
-        val_metrics = evaluate_model(model, val_loader, device, nc)
-        score = float(val_metrics[args.selection_metric])
+        val_metrics, yv, _, pv, _ = evaluate_model(model, val_loader, device, nc)
+        if args.selection_metric == "threshold_icbhi_score":
+            tuned = sweep_threshold(yv, pv)
+            score = float(tuned["icbhi_score"])
+        else:
+            score = float(val_metrics[args.selection_metric])
+
         if score > best_metric:
             best_metric = score
             best_epoch = epoch
             best_metrics = val_metrics
             patience_counter = 0
-            torch.save({"model_state": model.state_dict(), "epoch": epoch, "metrics": val_metrics}, output_dir / "best.pt")
+            save_dict = {"model_state": model.state_dict(), "epoch": epoch, "metrics": val_metrics}
+            if args.selection_metric == "threshold_icbhi_score":
+                save_dict["threshold"] = tuned["threshold"]
+                save_dict["threshold_metrics"] = tuned
+            torch.save(save_dict, output_dir / "best.pt")
         else:
             patience_counter += 1
         avg_loss = total_loss / max(len(train_loader.dataset), 1)
@@ -999,19 +1103,19 @@ def train_supervised(
 
 def evaluate_model(
     model: nn.Module, loader: DataLoader, device: torch.device, num_classes: int,
-) -> dict[str, float | int | str | None]:
+) -> tuple[dict[str, float | int | str | None], np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     model.eval()
-    y_true: list[int] = []
-    y_pred: list[int] = []
-    y_prob: list[list[float]] = []
+    y_true_list: list[int] = []
+    logits_all = []
     with torch.no_grad():
         for features, labels, _ in loader:
-            logits = model(features.to(device))
-            probs = F.softmax(logits, dim=1).cpu().numpy()
-            y_prob.extend(probs.tolist())
-            y_pred.extend(probs.argmax(axis=1).tolist())
-            y_true.extend(labels.numpy().tolist())
-    return compute_metrics(np.array(y_true), np.array(y_pred), np.array(y_prob), num_classes)
+            logits_all.append(model(features.to(device)).cpu())
+            y_true_list.extend(labels.numpy().tolist())
+    logits = torch.cat(logits_all, dim=0).numpy() if logits_all else np.zeros((0, num_classes), dtype=np.float32)
+    probs = F.softmax(torch.tensor(logits), dim=1).numpy()
+    y_true = np.array(y_true_list, dtype=np.int64)
+    y_pred = probs.argmax(axis=1) if len(probs) else np.array([], dtype=np.int64)
+    return compute_metrics(y_true, y_pred, probs, num_classes), y_true, y_pred, probs, logits
 
 
 # =============================================================================
@@ -1076,14 +1180,23 @@ def train_student(
             optimizer.step()
             total_loss += float(loss.item()) * features.size(0)
         scheduler.step()
-        val_metrics = evaluate_model(model, val_loader, device, nc)
-        score = float(val_metrics[args.selection_metric])
+        val_metrics, yv, _, pv, _ = evaluate_model(model, val_loader, device, nc)
+        if args.selection_metric == "threshold_icbhi_score":
+            tuned = sweep_threshold(yv, pv)
+            score = float(tuned["icbhi_score"])
+        else:
+            score = float(val_metrics[args.selection_metric])
+
         if score > best_metric:
             best_metric = score
             best_epoch = epoch
             best_metrics = val_metrics
             patience_counter = 0
-            torch.save({"model_state": model.state_dict(), "epoch": epoch, "metrics": val_metrics}, output_dir / "best.pt")
+            save_dict = {"model_state": model.state_dict(), "epoch": epoch, "metrics": val_metrics}
+            if args.selection_metric == "threshold_icbhi_score":
+                save_dict["threshold"] = tuned["threshold"]
+                save_dict["threshold_metrics"] = tuned
+            torch.save(save_dict, output_dir / "best.pt")
         else:
             patience_counter += 1
         avg_loss = total_loss / max(len(train_loader.dataset), 1)
@@ -1117,20 +1230,33 @@ def collect_logits(model: nn.Module, loader: DataLoader, device: torch.device) -
 def prepare_run(args: argparse.Namespace) -> tuple[Path, dict[str, list[CycleRecord]], FeatureStats]:
     output_dir = ensure_dir(Path(args.output_dir) if args.output_dir else ICBHI_4CLASS_SOTA_KD_ARTIFACTS_DIR)
     split_path = output_dir / "splits.json"
-    if split_path.exists() and (output_dir / "config.json").exists():
+    if split_path.exists() and (output_dir / "config.json").exists() and not args.rebuild_splits:
         with (output_dir / "config.json").open("r", encoding="utf-8") as f:
             cached_cfg = json.load(f)
-        if (cached_cfg.get("max_files") == args.max_files and
-            cached_cfg.get("max_cycles") == args.max_cycles and
-            cached_cfg.get("num_classes") == args.num_classes):
+        cache_matches = (
+            cached_cfg.get("max_files") == args.max_files
+            and cached_cfg.get("max_cycles") == args.max_cycles
+            and cached_cfg.get("num_classes") == args.num_classes
+            and cached_cfg.get("benchmark_protocol", "official_icbhi") == args.benchmark_protocol
+            and cached_cfg.get("add_rsc_split_seed") == args.add_rsc_split_seed
+            and cached_cfg.get("add_rsc_use_test_for_selection") == args.add_rsc_use_test_for_selection
+        )
+        if cache_matches:
             splits = load_split_records(output_dir)
             stats = load_feature_stats(output_dir)
             return output_dir, splits, stats
         else:
             print("Configuration or data split constraints changed. Rebuilding splits...", flush=True)
 
-    records = build_records(Path(args.data_dir), max_files=args.max_files, max_cycles=args.max_cycles)
-    splits = create_official_splits(records, args.num_classes, args.val_size, args.seed)
+    if args.benchmark_protocol == "official_icbhi":
+        records = build_records(Path(args.data_dir), args.max_files, args.max_cycles)
+        splits = create_official_splits(records, args.num_classes, args.val_size, args.seed)
+    elif args.benchmark_protocol == "add_rsc":
+        splits = create_add_rsc_splits(Path(args.data_dir), args)
+        records = splits["train"] + splits["val"] + splits["test"]
+    else:
+        raise ValueError(f"Unknown benchmark protocol: {args.benchmark_protocol}")
+
     stats = estimate_feature_stats(splits["train"], args)
     save_split_records(output_dir, splits)
     save_config(output_dir, args, stats, records, splits)
@@ -1267,18 +1393,23 @@ def evaluate_outputs(args, output_dir, splits, stats, device):
         ckpt = torch.load(cp, map_location=device)
         model.load_state_dict(ckpt["model_state"])
         model.to(device).eval()
-        metrics = evaluate_model(model, test_loader, device, nc)
-        y_true = np.array([get_label(r, nc) for r in splits["test"]])
-        y_pred_list: list[int] = []
-        with torch.no_grad():
-            for feats, _, _ in test_loader:
-                logits = model(feats.to(device))
-                y_pred_list.extend(logits.argmax(dim=1).cpu().numpy().tolist())
-        y_pred = np.array(y_pred_list)
-        save_metrics(output_dir, f"student_{kd_mode}_test", metrics, y_true, y_pred, nc)
-        log_wandb(metrics, f"eval/student_{kd_mode}_test")
-        log_wandb_confusion(f"confusion/student_{kd_mode}_test", y_true, y_pred, nc)
-        print(f"Student {kd_mode} test: ICBHI={metrics['icbhi_score']:.4f} F1={metrics['macro_f1']:.4f} Acc={metrics['accuracy']:.4f}", flush=True)
+        
+        # Evaluate model raw
+        raw_m, yt, yp, probs, _ = evaluate_model(model, test_loader, device, nc)
+        save_metrics(output_dir, f"student_{kd_mode}_test_raw", raw_m, yt, yp, nc)
+        log_wandb(raw_m, f"eval/student_{kd_mode}_test_raw")
+        log_wandb_confusion(f"confusion/student_{kd_mode}_test_raw", yt, yp, nc)
+        
+        # Apply the threshold found on val set
+        threshold = float(ckpt.get("threshold", 0.5))
+        tuned_pred = threshold_predictions(probs, threshold)
+        tuned_m = compute_metrics(yt, tuned_pred, probs, nc)
+        save_metrics(output_dir, f"student_{kd_mode}_test_threshold", tuned_m, yt, tuned_pred, nc)
+        log_wandb(tuned_m, f"eval/student_{kd_mode}_test_threshold")
+        log_wandb_confusion(f"confusion/student_{kd_mode}_test_threshold", yt, tuned_pred, nc)
+        
+        print(f"Student {kd_mode} test (raw): ICBHI={raw_m['icbhi_score']:.4f} F1={raw_m['macro_f1']:.4f} Acc={raw_m['accuracy']:.4f}", flush=True)
+        print(f"Student {kd_mode} test (tuned, th={threshold:.2f}): ICBHI={tuned_m['icbhi_score']:.4f} F1={tuned_m['macro_f1']:.4f} Acc={tuned_m['accuracy']:.4f}", flush=True)
 
 
 # =============================================================================
@@ -1338,8 +1469,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--weight_decay", type=float, default=1e-4)
     p.add_argument("--grad_clip", type=float, default=1.0)
     p.add_argument("--patience", type=int, default=20)
-    p.add_argument("--selection_metric", choices=["icbhi_score", "macro_f1", "balanced_accuracy"], default="icbhi_score")
+    p.add_argument("--selection_metric", choices=["icbhi_score", "macro_f1", "balanced_accuracy", "threshold_icbhi_score"], default="threshold_icbhi_score")
     # Split
+    p.add_argument("--benchmark_protocol", choices=["official_icbhi", "add_rsc"], default="add_rsc")
+    p.add_argument("--add_rsc_split_seed", type=int, default=1)
+    p.add_argument("--add_rsc_use_test_for_selection", action="store_true", default=False)
     p.add_argument("--val_size", type=float, default=0.2)
     p.add_argument("--seed", type=int, default=42)
     # System
@@ -1348,6 +1482,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--max_files", type=int, default=None)
     p.add_argument("--max_cycles", type=int, default=None)
     p.add_argument("--max_stat_samples", type=int, default=512)
+    p.add_argument("--rebuild_splits", action="store_true")
     p.add_argument("--skip_existing", action="store_true")
     # W&B
     p.add_argument("--wandb", action="store_true")
@@ -1359,6 +1494,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    torch.set_num_threads(1)
     args = parse_args()
     set_seed(args.seed)
     device = default_device(args.device)
