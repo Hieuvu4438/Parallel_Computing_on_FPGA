@@ -163,3 +163,5 @@ openclaude
 .openclaude-profile.json
 
 ADD-RSC
+
+.claude/*

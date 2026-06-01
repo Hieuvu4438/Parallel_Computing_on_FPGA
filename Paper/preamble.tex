@@ -1,8 +1,9 @@
 \usepackage{amsmath,amsfonts}
+\interdisplaylinepenalty=2500
 \usepackage{algorithmic}
 \usepackage{algorithm}
 \usepackage{array}
-\usepackage[caption=false,font=normalsize,labelfont=sf,textfont=sf]{subfig}
+\usepackage[caption=false,font=footnotesize]{subfig}
 \usepackage{textcomp}
 \usepackage{stfloats}
 \usepackage{url}
@@ -16,9 +17,17 @@
 \usepackage[table]{xcolor}
 \usepackage{booktabs}
 \usepackage{arydshln} % Load AFTER booktabs to avoid conflict
-\usepackage{tabularray}
 \usepackage{tabularx}
-\usepackage[tracking=true]{microtype} % Subliminal kerning & protrusion for IEEE quality
-\usepackage[hidelinks]{hyperref} % Must be loaded LAST
+\usepackage[tracking=true]{microtype} % subtle spacing improvements
+\usepackage[hidelinks]{hyperref} % keep last
+
+% IEEE-friendly float and caption spacing
+\setlength{\textfloatsep}{8pt plus 2pt minus 2pt}
+\setlength{\floatsep}{6pt plus 2pt minus 2pt}
+\setlength{\intextsep}{6pt plus 2pt minus 2pt}
+\setlength{\abovecaptionskip}{3pt}
+\setlength{\belowcaptionskip}{0pt}
+\renewcommand{\arraystretch}{1.12}
+
 \hyphenation{op-tical net-works semi-conduc-tor IEEE-Xplore}
 \graphicspath{{figures/}}

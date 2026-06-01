@@ -14,6 +14,13 @@ Default strategy: multiview log-mel/delta/delta-delta teachers + DS-CNN-Res-SE s
 
 from __future__ import annotations
 
+import os
+os.environ["OMP_NUM_THREADS"] = "2"
+os.environ["MKL_NUM_THREADS"] = "2"
+os.environ["OPENBLAS_NUM_THREADS"] = "2"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "2"
+os.environ["NUMEXPR_NUM_THREADS"] = "2"
+
 import argparse
 import csv
 import json
@@ -22,6 +29,9 @@ import random
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
+
+import torch
+torch.set_num_threads(2)
 
 import numpy as np
 import torch
@@ -328,25 +338,53 @@ class ICBHIDataset(Dataset):
         self.target_samples = int(round(args.duration_sec * args.sample_rate))
         self.fb = build_mel_filterbank(args.sample_rate, args.n_fft, args.n_mels, args.f_min, args.f_max)
         self._cache: dict[str, tuple[np.ndarray, int]] = {}
+        
+        # Setup Cache Directory based on spectrogram config
+        import hashlib
+        param_str = f"{args.sample_rate}_{args.n_fft}_{args.win_length}_{args.hop_length}_{args.n_mels}_{args.target_frames}_{args.f_min}_{args.f_max}_{args.no_bandpass}_{args.duration_sec}"
+        param_hash = hashlib.md5(param_str.encode('utf-8')).hexdigest()
+        self.cache_dir = Path("/home/haipd/Parallel_Computing_on_FPGA/data/cache_spectrograms") / param_hash
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
 
     def __len__(self):
         return len(self.records)
 
     def __getitem__(self, idx):
         r = self.records[idx]
-        wf, sr = self._load(r.wav_path)
-        seg = segment_waveform(wf, sr, r.start_sec, r.end_sec, self.target_samples)
+        cache_file = self.cache_dir / f"{r.sample_id}.npy"
+        
+        # Load from cache if it exists, otherwise compute and save
+        if cache_file.exists():
+            feat = np.load(cache_file)
+        else:
+            wf, sr = self._load(r.wav_path)
+            seg = segment_waveform(wf, sr, r.start_sec, r.end_sec, self.target_samples)
+            # Compute base logmel without wave augmentations for caching
+            feat = compute_logmel(seg, sr, self.fb, self.args.n_fft, self.args.win_length, self.args.hop_length, self.args.target_frames)
+            np.save(cache_file, feat)
+            
+        # Apply augmentations on the fly if training
         if self.augment:
-            seg = apply_wave_aug(seg, self.args.time_shift, self.args.noise_std, self.args.speed_perturb)
-        feat = compute_logmel(seg, sr, self.fb, self.args.n_fft, self.args.win_length, self.args.hop_length, self.args.target_frames)
-        if self.augment:
+            # 1. SpecAugment
             feat = apply_spec_aug(feat, self.args.freq_mask, self.args.time_mask)
+            # 2. Time shift on spectrogram via rolling
+            if self.args.time_shift > 0:
+                max_shift = int(self.args.time_shift * self.args.target_frames / self.args.duration_sec)
+                if max_shift > 0:
+                    shift = np.random.randint(-max_shift, max_shift + 1)
+                    feat = np.roll(feat, shift, axis=1)
+            # 3. Add noise on spectrogram
+            if self.args.noise_std > 0:
+                feat += np.random.normal(0, self.args.noise_std, feat.shape).astype(np.float32)
+                
         if self.stats is not None:
             feat = (feat - self.stats.mean) / max(self.stats.std, 1e-6)
+            
         if self.args.input_view == "logmel_delta":
             tensor = torch.from_numpy(add_delta_channels(feat)).float()
         else:
             tensor = torch.from_numpy(feat).unsqueeze(0).float()
+            
         label = torch.tensor(get_label(r, self.args.num_classes), dtype=torch.long)
         ident = r.sample_id if self.return_sample_id else torch.tensor(idx, dtype=torch.long)
         return tensor, label, ident
@@ -887,6 +925,10 @@ def train_student(args, splits, stats, device, output_dir):
     opt = torch.optim.AdamW(student.parameters(), lr=args.lr_student, weight_decay=args.weight_decay)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=max(args.epochs_student, 1))
     best_score, best_epoch, patience = -1.0, 0, 0
+    best_tiebreak_macro = -1.0
+    best_tiebreak_bal = -1.0
+    best_tiebreak_both = -1.0
+    min_both_f1_guard = 0.05 if args.num_classes == 4 else -1.0
     best_path = student_dir / "best.pt"
     for epoch in range(1, args.epochs_student + 1):
         student.train()
@@ -915,15 +957,57 @@ def train_student(args, splits, stats, device, output_dir):
         val_m, yv, _, pv, _ = evaluate_model(student, val_loader, device, args.num_classes)
         tuned = sweep_threshold(yv, pv)
         score = float(tuned["icbhi_score"] if args.selection_metric == "threshold_icbhi_score" else val_m[args.selection_metric])
-        if score > best_score:
+        both_f1 = float(val_m.get("both_f1", 0.0)) if args.num_classes == 4 else 0.0
+        meets_guard = both_f1 >= min_both_f1_guard
+        macro_f1 = float(val_m.get("macro_f1", 0.0))
+        bal_acc = float(val_m.get("balanced_accuracy", 0.0))
+
+        better_primary = score > best_score + 1e-12
+        tie_primary = abs(score - best_score) <= 1e-12
+        better_tiebreak = tie_primary and (
+            (macro_f1 > best_tiebreak_macro + 1e-12)
+            or (abs(macro_f1 - best_tiebreak_macro) <= 1e-12 and bal_acc > best_tiebreak_bal + 1e-12)
+            or (abs(macro_f1 - best_tiebreak_macro) <= 1e-12 and abs(bal_acc - best_tiebreak_bal) <= 1e-12 and both_f1 > best_tiebreak_both + 1e-12)
+        )
+
+        should_save = False
+        if meets_guard and (better_primary or better_tiebreak):
+            should_save = True
+        elif (not meets_guard) and (best_epoch == 0) and better_primary:
+            # Bootstrap fallback: if no guarded checkpoint exists yet, allow first improving checkpoint.
+            should_save = True
+
+        if should_save:
             best_score, best_epoch, patience = score, epoch, 0
-            torch.save({"model_state": student.state_dict(), "epoch": epoch, "arch": args.student_arch, "threshold": tuned["threshold"], "metrics": val_m, "threshold_metrics": tuned, "args": vars(args)}, best_path)
+            best_tiebreak_macro = macro_f1
+            best_tiebreak_bal = bal_acc
+            best_tiebreak_both = both_f1
+            torch.save(
+                {
+                    "model_state": student.state_dict(),
+                    "epoch": epoch,
+                    "arch": args.student_arch,
+                    "threshold": tuned["threshold"],
+                    "metrics": val_m,
+                    "threshold_metrics": tuned,
+                    "args": vars(args),
+                    "selection_info": {
+                        "score": score,
+                        "macro_f1": macro_f1,
+                        "balanced_accuracy": bal_acc,
+                        "both_f1": both_f1,
+                        "meets_both_f1_guard": meets_guard,
+                        "both_f1_guard": min_both_f1_guard,
+                    },
+                },
+                best_path,
+            )
             np.save(student_dir / "val_probs_best.npy", pv)
         else:
             patience += 1
         denom = max(len(train_ds), 1)
-        log_wandb({"epoch": epoch, "loss": total / denom, "hard_loss": hard_total / denom, "kd_loss": kd_total / denom, "binary_loss": bin_total / denom, **{f"val_{k}": v for k, v in val_m.items() if isinstance(v, (int, float))}, "val_threshold_icbhi_score": tuned["icbhi_score"], "val_threshold": tuned["threshold"]}, prefix="student", step=epoch)
-        print(f"student ep={epoch:03d} loss={total/denom:.4f} val_icbhi={val_m['icbhi_score']:.4f} tuned={tuned['icbhi_score']:.4f} best={best_score:.4f}", flush=True)
+        log_wandb({"epoch": epoch, "loss": total / denom, "hard_loss": hard_total / denom, "kd_loss": kd_total / denom, "binary_loss": bin_total / denom, **{f"val_{k}": v for k, v in val_m.items() if isinstance(v, (int, float))}, "val_threshold_icbhi_score": tuned["icbhi_score"], "val_threshold": tuned["threshold"], "val_meets_both_f1_guard": float(meets_guard), "val_both_f1_guard": float(min_both_f1_guard), "best_score": float(best_score), "best_macro_f1": float(best_tiebreak_macro), "best_balanced_accuracy": float(best_tiebreak_bal), "best_both_f1": float(best_tiebreak_both)}, prefix="student", step=epoch)
+        print(f"student ep={epoch:03d} loss={total/denom:.4f} val_icbhi={val_m['icbhi_score']:.4f} tuned={tuned['icbhi_score']:.4f} macro={macro_f1:.4f} bal={bal_acc:.4f} both={both_f1:.4f} guard={int(meets_guard)} best={best_score:.4f}", flush=True)
         if patience >= args.patience:
             break
     finish_wandb()

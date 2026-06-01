@@ -18,7 +18,22 @@
       "Bash(tmux list-sessions *)",
       "Bash(conda activate *)",
       "Bash(tmux capture-pane *)",
-      "Bash(tmux ls *)"
+      "Bash(tmux ls *)",
+      "mcp__ccs-websearch__WebSearch",
+      "WebFetch(domain:www.nature.com)",
+      "WebFetch(domain:doi.org)",
+      "WebFetch(domain:www.scientific.net)",
+      "WebFetch(domain:openaccess.thecvf.com)",
+      "WebFetch(domain:arxiv.org)",
+      "Bash(tmux list-windows *)",
+      "Bash(tmux display-message *)",
+      "Bash(ps -p 156106 -o pid,ppid,cmd --no-headers)",
+      "Bash(ps --ppid 156106 -o pid,cmd --no-headers)",
+      "Bash(ps *)",
+      "WebSearch",
+      "WebFetch(domain:paperswithcode.com)",
+      "WebFetch(domain:scholar.google.com)",
+      "WebFetch(domain:api.semanticscholar.org)"
     ]
   }
 }
