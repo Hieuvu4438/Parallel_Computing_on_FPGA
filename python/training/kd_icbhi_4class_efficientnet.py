@@ -666,11 +666,29 @@ def per_class_specificity(cm: np.ndarray) -> np.ndarray:
     return np.array(values, dtype=np.float32)
 
 
-def icbhi_disease_score(y_true: np.ndarray, y_pred: np.ndarray) -> tuple[float, float, float]:
-    healthy_mask = y_true == HEALTHY_INDEX
-    abnormal_mask = y_true != HEALTHY_INDEX
+def icbhi_disease_score(y_true: np.ndarray, y_pred: np.ndarray, num_classes: int = NUM_CLASSES) -> tuple[float, float, float]:
+    """
+    Calculate ICBHI score = (Sensitivity + Specificity) / 2.
+    - If num_classes == 4 (Strict 4-class classification):
+        Specificity = Recall of class 0 (Healthy)
+        Sensitivity = Total correct predictions of abnormal classes divided by total abnormal samples.
+    - If num_classes == 2 (Binary classification):
+        Standard Sensitivity/Specificity.
+    """
+    healthy_mask = (y_true == HEALTHY_INDEX)
+    abnormal_mask = (y_true != HEALTHY_INDEX)
+
+    # Specificity is always the recall of Healthy class
     specificity = float(np.mean(y_pred[healthy_mask] == HEALTHY_INDEX)) if healthy_mask.any() else 0.0
-    sensitivity = float(np.mean(y_pred[abnormal_mask] != HEALTHY_INDEX)) if abnormal_mask.any() else 0.0
+
+    if num_classes == 4:
+        # Strict 4-class Sensitivity: predictions must match targets exactly
+        correct_abnormal = np.sum((y_true != HEALTHY_INDEX) & (y_true == y_pred))
+        total_abnormal = np.sum(abnormal_mask)
+        sensitivity = float(correct_abnormal / total_abnormal) if total_abnormal > 0 else 0.0
+    else:
+        # Binary or 2-class: any non-healthy prediction on abnormal samples is correct
+        sensitivity = float(np.mean(y_pred[abnormal_mask] != HEALTHY_INDEX)) if abnormal_mask.any() else 0.0
     return sensitivity, specificity, (sensitivity + specificity) / 2.0
 
 

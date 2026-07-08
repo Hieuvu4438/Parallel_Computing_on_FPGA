@@ -363,8 +363,15 @@ def train_student_curriculum_ema(args, splits, stats, device, output_dir):
     val_loader = base.make_loader(base.ICBHIDataset(splits["val"], args, stats, False), args)
 
     # Optimizer
-    opt = torch.optim.AdamW(student.parameters(), lr=args.lr_student, weight_decay=args.weight_decay)
-    sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=max(args.epochs_student, 1))
+    use_sam = getattr(args, 'use_sam', False)
+    if use_sam:
+        opt = base.make_sam_optimizer(student.parameters(), lr=args.lr_student,
+                                      weight_decay=args.weight_decay,
+                                      rho=getattr(args, 'sam_rho', 0.05))
+    else:
+        opt = torch.optim.AdamW(student.parameters(), lr=args.lr_student, weight_decay=args.weight_decay)
+    sched = torch.optim.lr_scheduler.CosineAnnealingLR(
+        opt.base_optimizer if use_sam else opt, T_max=max(args.epochs_student, 1))
 
     best_score, best_epoch, patience = -1.0, 0, 0
     best_tiebreak_macro = -1.0
@@ -397,43 +404,30 @@ def train_student_curriculum_ema(args, splits, stats, device, output_dir):
 
         for x, y, _, tprob in train_loader:
             x, y, tprob = x.to(device), y.to(device), tprob.to(device)
-            opt.zero_grad(set_to_none=True)
 
-            # Student forward
+            # Compute loss inline (no closure, no EMA)
             logits = student(x)
-
-            # Hard loss (class-balanced focal)
-            hard_loss = cb_focal(logits, y)
-
-            # KD loss from external teacher ensemble
+            hard_loss = hard(logits, y)
             kd_loss = -(tprob * F.log_softmax(logits / args.temperature, dim=1)).sum(dim=1).mean() * (args.temperature ** 2)
 
-            # EMA teacher KD loss (Mean Teacher)
-            ema_loss = torch.tensor(0.0, device=device)
-            if epoch > args.ema_warmup:
-                with torch.no_grad():
-                    ema_logits = ema.get_ema_model()(x)
-                    ema_probs = F.softmax(ema_logits / args.ema_temperature, dim=1)
-                ema_loss = -(ema_probs * F.log_softmax(logits / args.ema_temperature, dim=1)).sum(dim=1).mean() * (args.ema_temperature ** 2)
-
-            # Binary auxiliary loss
             hard_bin = (y != 0).float()
             teacher_bin = (1.0 - tprob[:, 0]).clamp(0, 1)
             bin_target = 0.5 * hard_bin + 0.5 * teacher_bin
             bin_loss = F.binary_cross_entropy_with_logits(
                 base.abnormal_logit_from_4class(logits), bin_target)
 
-            # Combined loss
-            loss = w_hard * hard_loss + w_kd * kd_loss + w_bin * bin_loss + args.ema_weight * ema_loss
+            loss = w_hard * hard_loss + w_kd * kd_loss + w_bin * bin_loss
 
+            opt.zero_grad(set_to_none=True)
             loss.backward()
             if args.grad_clip > 0:
                 nn.utils.clip_grad_norm_(student.parameters(), args.grad_clip)
             opt.step()
+            ema_loss = torch.tensor(0.0, device=device)
 
             # Update EMA
             if epoch > args.ema_warmup:
-                ema.update(student)
+                pass  # ema.update(student) disabled
 
             n = x.size(0)
             total += float(loss.item()) * n
@@ -448,7 +442,8 @@ def train_student_curriculum_ema(args, splits, stats, device, output_dir):
         # Validation with EMA model (if available)
         eval_model = ema.get_ema_model() if epoch > args.ema_warmup else student
         val_m, yv, _, pv, _ = base.evaluate_model(eval_model, val_loader, device, args.num_classes)
-        tuned = base.sweep_threshold(yv, pv)
+        sweep_fn = base.sweep_threshold_fine if getattr(args, 'fine_threshold', False) else base.sweep_threshold
+        tuned = sweep_fn(yv, pv)
         score = float(tuned["icbhi_score"] if args.selection_metric == "threshold_icbhi_score"
                       else val_m[args.selection_metric])
         both_f1 = float(val_m.get("both_f1", 0.0)) if args.num_classes == 4 else 0.0
@@ -646,7 +641,7 @@ def parse_args():
     args = base.parse_args()
 
     if args.pipeline_name == "icbhi_kd_multiview_ensemble":
-        args.pipeline_name = "icbhi_kd_s3_curriculum_ema"
+        args.pipeline_name = f"icbhi_kd_s3_curriculum_{args.num_classes}class"
     if args.benchmark_protocol == "add_rsc":
         args.benchmark_protocol = "official_icbhi"
     if args.teacher_arches == "resnet_cnn,resnet_crnn,efficientnet_b0":
@@ -656,13 +651,13 @@ def parse_args():
     if args.input_view == "logmel_delta":
         args.input_view = "logmel_delta"
 
-    # Progressive KD weights (end values)
+    # Progressive KD weights (end values) — tuned to avoid abnormal bias
     if args.hard_weight == 0.35:
-        args.hard_weight = 0.28
+        args.hard_weight = 0.38
     if args.kd_weight == 0.45:
-        args.kd_weight = 0.47
+        args.kd_weight = 0.45
     if args.binary_weight == 0.20:
-        args.binary_weight = 0.25
+        args.binary_weight = 0.12
     if args.temperature == 4.0:
         args.temperature = 4.0
     if args.label_smoothing == 0.05:
@@ -673,20 +668,24 @@ def parse_args():
     # New arguments
     defaults = {
         # Progressive KD start values
-        "hard_weight_start": 0.45,
-        "kd_weight_start": 0.35,
-        "binary_weight_start": 0.20,
+        "hard_weight_start": 0.35,
+        "kd_weight_start": 0.45,
+        "binary_weight_start": 0.15,
         "progressive_warmup": 30,
         # EMA
         "ema_decay": 0.998,
         "ema_temperature": 3.0,
-        "ema_weight": 0.15,
+        "ema_weight": 0.0,
         "ema_warmup": 10,
         # Curriculum
-        "curriculum_start": 0.4,
-        "curriculum_warmup": 25,
+        "curriculum_start": 1.0,
+        "curriculum_warmup": 50,
         # Class-balanced
         "cb_beta": 0.9999,
+        # SOTA upgrades
+        "use_sam": False,
+        "sam_rho": 0.02,
+        "fine_threshold": True,
     }
     for k, v in defaults.items():
         if not hasattr(args, k):

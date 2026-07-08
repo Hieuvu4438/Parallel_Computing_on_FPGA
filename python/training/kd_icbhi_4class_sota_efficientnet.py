@@ -27,8 +27,14 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable
 
+import os
+os.environ["OMP_NUM_THREADS"] = "2"
+os.environ["MKL_NUM_THREADS"] = "2"
+os.environ["OPENBLAS_NUM_THREADS"] = "2"
+
 import numpy as np
 import torch
+torch.set_num_threads(2)
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as models
@@ -474,10 +480,30 @@ def per_class_specificity(cm):
     return np.array(vals, dtype=np.float32)
 
 
-def icbhi_score(y_true, y_pred, nc):
-    nm = y_true == 0; am = y_true != 0
-    sp = float(np.mean(y_pred[nm] == 0)) if nm.any() else 0.0
-    se = float(np.mean(y_pred[am] != 0)) if am.any() else 0.0
+def icbhi_score(y_true, y_pred, nc=4):
+    """
+    Calculate ICBHI score = (Sensitivity + Specificity) / 2.
+    - If nc == 4 (Strict 4-class classification):
+        Specificity = Recall of class 0 (Normal)
+        Sensitivity = Total correct predictions of classes 1, 2, 3 divided by total abnormal samples.
+    - If nc == 2 (Binary classification):
+        Standard Sensitivity/Specificity.
+    """
+    normal_mask = (y_true == 0)
+    abnormal_mask = (y_true != 0)
+
+    # Specificity is always the recall of class 0 (Normal)
+    sp = float(np.mean(y_pred[normal_mask] == 0)) if normal_mask.any() else 0.0
+
+    if nc == 4:
+        # Strict 4-class Sensitivity: predictions must match targets exactly
+        correct_abnormal = np.sum((y_true != 0) & (y_true == y_pred))
+        total_abnormal = np.sum(abnormal_mask)
+        se = float(correct_abnormal / total_abnormal) if total_abnormal > 0 else 0.0
+    else:
+        # Binary or 2-class: any non-zero prediction on abnormal samples is correct
+        se = float(np.mean(y_pred[abnormal_mask] != 0)) if abnormal_mask.any() else 0.0
+
     return se, sp, (se + sp) / 2.0
 
 

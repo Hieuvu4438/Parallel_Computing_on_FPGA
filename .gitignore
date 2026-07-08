@@ -165,3 +165,18 @@ openclaude
 ADD-RSC
 
 .claude/*
+
+# ==========================================================
+# Academic Papers and Nested Repo Exclusions
+# ==========================================================
+*.pdf
+python/rsc-ensemble-kd/save/
+python/rsc-ensemble-kd/data/
+python/rsc-ensemble-kd/teacher_logits/
+python/rsc-ensemble-kd/teacher_logits_beats/
+python/rsc-ensemble-kd/teacher_logits_fused/
+python/rsc-ensemble-kd/teacher_logits_larger_clap/
+python/rsc-ensemble-kd/pretrained_models/
+python/rsc-ensemble-kd/logs/
+python/rsc-ensemble-kd/*.txt
+

@@ -308,8 +308,14 @@ def train_student_enhanced(args, splits, stats, device, output_dir):
                           args.focal_gamma, args.label_smoothing)
 
     # Optimizer with larger LR for student (better convergence)
-    opt = torch.optim.AdamW(student.parameters(), lr=args.lr_student, weight_decay=args.weight_decay)
-    sched = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(opt, T_0=30, T_mult=2)
+    use_sam = getattr(args, 'use_sam', False)
+    if use_sam:
+        opt = base.make_sam_optimizer(student.parameters(), lr=args.lr_student,
+                                      weight_decay=args.weight_decay,
+                                      rho=getattr(args, 'sam_rho', 0.05))
+    else:
+        opt = torch.optim.AdamW(student.parameters(), lr=args.lr_student, weight_decay=args.weight_decay)
+    sched = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(opt.base_optimizer if use_sam else opt, T_0=30, T_mult=2)
 
     best_score, best_epoch, patience = -1.0, 0, 0
     best_tiebreak_macro = -1.0
@@ -325,38 +331,61 @@ def train_student_enhanced(args, splits, stats, device, output_dir):
 
         for x, y, _, tprob in train_loader:
             x, y, tprob = x.to(device), y.to(device), tprob.to(device)
-            opt.zero_grad(set_to_none=True)
 
-            # Apply MixUp
-            if args.mixup_alpha > 0 and np.random.random() < args.mixup_prob:
-                x_mix, y_a, y_b, lam = mixup_data(x, y, args.mixup_alpha)
-                logits = student(x_mix)
-                hard_loss = mixup_criterion(hard, logits, y_a, y_b, lam)
-                # For KD loss, use the mixed teacher probs
-                tprob_mix = lam * tprob + (1 - lam) * tprob[torch.randperm(x.size(0), device=x.device)]
+            def compute_loss(x_in, y_in, tprob_in):
+                """Compute combined loss (needed twice for SAM)."""
+                # Apply MixUp or Lungmix
+                use_lungmix = getattr(args, 'use_lungmix', False)
+                if args.mixup_alpha > 0 and np.random.random() < args.mixup_prob:
+                    if use_lungmix:
+                        x_mix, y_a, y_b, lam, tprob_mix = base.lungmix_data(
+                            x_in, y_in, tprob_in, alpha=args.mixup_alpha)
+                    else:
+                        x_mix, y_a, y_b, lam = mixup_data(x_in, y_in, args.mixup_alpha)
+                        tprob_mix = lam * tprob_in + (1 - lam) * tprob_in[torch.randperm(x_in.size(0), device=x_in.device)]
+                    logits = student(x_mix)
+                    hard_loss = mixup_criterion(hard, logits, y_a, y_b, lam)
+                else:
+                    logits = student(x_in)
+                    hard_loss = hard(logits, y_in)
+                    tprob_mix = tprob_in
+
+                # KD loss (KL divergence)
+                kd_loss = -(tprob_mix * F.log_softmax(logits / args.temperature, dim=1)).sum(dim=1).mean() * (args.temperature ** 2)
+
+                # Binary auxiliary loss (sensitivity-aware)
+                hard_bin = (y_in != 0).float()
+                teacher_bin = (1.0 - tprob_in[:, 0]).clamp(0, 1)
+                bin_target = (1 - args.bin_teacher_ratio) * hard_bin + args.bin_teacher_ratio * teacher_bin
+                bin_loss = F.binary_cross_entropy_with_logits(
+                    base.abnormal_logit_from_4class(logits), bin_target)
+
+                # Combined loss with sensitivity-aware rebalancing
+                loss = args.hard_weight * hard_loss + args.kd_weight * kd_loss + args.binary_weight * bin_loss
+                return loss, hard_loss, kd_loss, bin_loss
+
+            if use_sam:
+                # SAM: first step
+                opt.zero_grad(set_to_none=True)
+                loss, hard_loss, kd_loss, bin_loss = compute_loss(x, y, tprob)
+                loss.backward()
+                if args.grad_clip > 0:
+                    nn.utils.clip_grad_norm_(student.parameters(), args.grad_clip)
+                opt.first_step(zero_grad=True)
+
+                # SAM: second step (at perturbed weights)
+                loss2, _, _, _ = compute_loss(x, y, tprob)
+                loss2.backward()
+                if args.grad_clip > 0:
+                    nn.utils.clip_grad_norm_(student.parameters(), args.grad_clip)
+                opt.second_step(zero_grad=True)
             else:
-                logits = student(x)
-                hard_loss = hard(logits, y)
-                tprob_mix = tprob
-
-            # KD loss (KL divergence)
-            kd_loss = -(tprob_mix * F.log_softmax(logits / args.temperature, dim=1)).sum(dim=1).mean() * (args.temperature ** 2)
-
-            # Binary auxiliary loss (sensitivity-aware)
-            hard_bin = (y != 0).float()
-            teacher_bin = (1.0 - tprob[:, 0]).clamp(0, 1)
-            # Weight towards hard labels to boost sensitivity
-            bin_target = (1 - args.bin_teacher_ratio) * hard_bin + args.bin_teacher_ratio * teacher_bin
-            bin_loss = F.binary_cross_entropy_with_logits(
-                base.abnormal_logit_from_4class(logits), bin_target)
-
-            # Combined loss with sensitivity-aware rebalancing
-            loss = args.hard_weight * hard_loss + args.kd_weight * kd_loss + args.binary_weight * bin_loss
-
-            loss.backward()
-            if args.grad_clip > 0:
-                nn.utils.clip_grad_norm_(student.parameters(), args.grad_clip)
-            opt.step()
+                opt.zero_grad(set_to_none=True)
+                loss, hard_loss, kd_loss, bin_loss = compute_loss(x, y, tprob)
+                loss.backward()
+                if args.grad_clip > 0:
+                    nn.utils.clip_grad_norm_(student.parameters(), args.grad_clip)
+                opt.step()
 
             n = x.size(0)
             total += float(loss.item()) * n
@@ -369,7 +398,8 @@ def train_student_enhanced(args, splits, stats, device, output_dir):
 
         # Validation
         val_m, yv, _, pv, _ = base.evaluate_model(student, val_loader, device, args.num_classes)
-        tuned = base.sweep_threshold(yv, pv)
+        sweep_fn = base.sweep_threshold_fine if getattr(args, 'fine_threshold', False) else base.sweep_threshold
+        tuned = sweep_fn(yv, pv)
         score = float(tuned["icbhi_score"] if args.selection_metric == "threshold_icbhi_score"
                       else val_m[args.selection_metric])
         both_f1 = float(val_m.get("both_f1", 0.0)) if args.num_classes == 4 else 0.0
@@ -555,7 +585,8 @@ def evaluate_student_tta(model, loader, device, args, n_tta=7):
     y_true = np.array(yt_all, dtype=np.int64)
 
     # Sweep threshold on TTA probs
-    tuned = base.sweep_threshold(y_true, probs)
+    sweep_fn = base.sweep_threshold_fine if getattr(args, 'fine_threshold', False) else base.sweep_threshold
+    tuned = sweep_fn(y_true, probs)
     y_pred = base.threshold_predictions(probs, tuned["threshold"])
     return base.compute_metrics(y_true, y_pred, probs, args.num_classes)
 
@@ -569,7 +600,7 @@ def parse_args():
 
     # Pipeline identity
     if args.pipeline_name == "icbhi_kd_multiview_ensemble":
-        args.pipeline_name = "icbhi_kd_s1_tta_calibrated"
+        args.pipeline_name = f"icbhi_kd_s1_tta_{args.num_classes}class"
 
     # Official ICBHI protocol
     if args.benchmark_protocol == "add_rsc":
@@ -589,13 +620,13 @@ def parse_args():
 
     # === KEY CHANGES FOR S1 ===
 
-    # Sensitivity-aware loss rebalancing: higher binary weight
+    # Loss rebalancing — reduce binary weight to prevent abnormal bias
     if args.hard_weight == 0.35:
-        args.hard_weight = 0.30
+        args.hard_weight = 0.35
     if args.kd_weight == 0.45:
         args.kd_weight = 0.45
     if args.binary_weight == 0.20:
-        args.binary_weight = 0.25  # Higher binary weight -> better sensitivity
+        args.binary_weight = 0.15  # Lower binary to avoid abnormal bias
 
     # Temperature
     if args.temperature == 4.0:
@@ -624,6 +655,11 @@ def parse_args():
         "n_tta_teachers": 5,
         "n_tta_eval": 7,
         "warm_restart": True,
+        # SOTA upgrades
+        "use_sam": True,
+        "sam_rho": 0.02,
+        "use_lungmix": True,
+        "fine_threshold": True,
     }
     for k, v in defaults.items():
         if not hasattr(args, k):

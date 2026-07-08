@@ -314,6 +314,24 @@ def apply_wave_aug(wf, shift, noise_std, speed_perturb):
     return aug.astype(np.float32)
 
 
+def vtlp_augment_waveform(wf, sample_rate=16000, alpha_range=(0.9, 1.1)):
+    """
+    Vocal Tract Length Perturbation (VTLP) augmentation.
+
+    Paper: Dong et al. 2025 - RSC-FTF (Expected +3.19% ICBHI)
+    Simulates vocal tract length variations across patients.
+    """
+    aug = wf.copy()
+    alpha = np.random.uniform(*alpha_range)
+    n_samples = len(aug)
+    indices = np.clip(np.arange(n_samples) * alpha, 0, n_samples - 1).astype(int)
+    aug = aug[indices]
+    # Gaussian noise injection
+    noise_level = np.random.uniform(0.001, 0.01)
+    aug += np.random.randn(len(aug)).astype(np.float32) * noise_level
+    return aug
+
+
 def apply_spec_aug(feat, freq_mask, time_mask):
     aug = feat.copy()
     fill = float(aug.mean())
@@ -365,17 +383,31 @@ class ICBHIDataset(Dataset):
             
         # Apply augmentations on the fly if training
         if self.augment:
-            # 1. SpecAugment
-            feat = apply_spec_aug(feat, self.args.freq_mask, self.args.time_mask)
-            # 2. Time shift on spectrogram via rolling
+            label = self.records[idx].label_4class if hasattr(self.records[idx], 'label_4class') else 0
+            # Minority class boost: apply augmentation 2x more often for Both(3) and Wheeze(2)
+            aug_prob_mult = 1.0
+            if label in (2, 3):  # Wheeze or Both
+                aug_prob_mult = 2.0
+            # 1. VTLP frequency warping (Dong et al. 2025, +3.19% ICBHI)
+            if getattr(self.args, 'use_vtlp', False) and np.random.random() < min(0.5 * aug_prob_mult, 0.9):
+                alpha = np.random.uniform(0.85, 1.15) if label in (2, 3) else np.random.uniform(0.9, 1.1)
+                n_freq = feat.shape[0]
+                indices = np.clip(np.arange(n_freq) * alpha, 0, n_freq - 1).astype(int)
+                feat = feat[indices]
+            # 2. SpecAugment (stronger for minority classes)
+            fm = self.args.freq_mask if label not in (2, 3) else min(self.args.freq_mask + 4, 24)
+            tm = self.args.time_mask if label not in (2, 3) else min(self.args.time_mask + 16, 96)
+            feat = apply_spec_aug(feat, fm, tm)
+            # 3. Time shift on spectrogram via rolling
             if self.args.time_shift > 0:
                 max_shift = int(self.args.time_shift * self.args.target_frames / self.args.duration_sec)
                 if max_shift > 0:
                     shift = np.random.randint(-max_shift, max_shift + 1)
                     feat = np.roll(feat, shift, axis=1)
-            # 3. Add noise on spectrogram
-            if self.args.noise_std > 0:
-                feat += np.random.normal(0, self.args.noise_std, feat.shape).astype(np.float32)
+            # 4. Add noise on spectrogram (stronger for minority)
+            noise = self.args.noise_std if label not in (2, 3) else self.args.noise_std * 1.5
+            if noise > 0:
+                feat += np.random.normal(0, noise, feat.shape).astype(np.float32)
                 
         if self.stats is not None:
             feat = (feat - self.stats.mean) / max(self.stats.std, 1e-6)
@@ -411,22 +443,39 @@ def estimate_feature_stats(records, args):
     return FeatureStats(float(mean), float(math.sqrt(max(total_sq / count - mean * mean, 1e-12))))
 
 
-def class_weights(records, nc, device):
+def class_weights(records, nc, device, beta=0.0):
+    """
+    Class weights for loss function.
+    - beta=0.0: simple inverse frequency (N / (N_c * C))
+    - beta>0.0: effective number of samples (Cui et al. CVPR 2019)
+        weight_c = (1 - beta) / (1 - beta^n_c)
+    """
     labels = [get_label(r, nc) for r in records]
     counts = np.bincount(labels, minlength=nc).astype(np.float32)
-    weights = counts.sum() / np.maximum(counts * nc, 1.0)
+    if beta > 0:
+        # Effective number of samples weighting
+        effective_num = 1.0 - np.power(beta, counts)
+        weights = (1.0 - beta) / np.maximum(effective_num, 1e-8)
+        weights = weights / weights.sum() * nc  # normalize to sum to nc
+    else:
+        weights = counts.sum() / np.maximum(counts * nc, 1.0)
     return torch.tensor(weights, dtype=torch.float32, device=device)
 
 
-def sample_weights(records, nc):
+def sample_weights(records, nc, beta=0.0):
     labels = [get_label(r, nc) for r in records]
     counts = np.bincount(labels, minlength=nc).astype(np.float64)
-    weights = counts.sum() / np.maximum(counts * nc, 1.0)
+    if beta > 0:
+        effective_num = 1.0 - np.power(beta, counts)
+        weights = (1.0 - beta) / np.maximum(effective_num, 1e-8)
+        weights = weights / weights.sum() * nc
+    else:
+        weights = counts.sum() / np.maximum(counts * nc, 1.0)
     return torch.tensor([weights[y] for y in labels], dtype=torch.double)
 
 
-def make_loader(ds, args, records=None, balanced=False, shuffle=False):
-    sampler = WeightedRandomSampler(sample_weights(records, args.num_classes), len(records), replacement=True) if balanced and records else None
+def make_loader(ds, args, records=None, balanced=False, shuffle=False, beta=0.0):
+    sampler = WeightedRandomSampler(sample_weights(records, args.num_classes, beta=beta), len(records), replacement=True) if balanced and records else None
     return DataLoader(ds, batch_size=args.batch_size, shuffle=shuffle and sampler is None, sampler=sampler, num_workers=args.num_workers, pin_memory=torch.cuda.is_available())
 
 
@@ -502,7 +551,7 @@ class ResNetCNNTeacher(nn.Module):
 class ResNetCRNNTeacher(nn.Module):
     def __init__(self, nc=4, in_ch=1, hidden=128):
         super().__init__()
-        self.cnn = nn.Sequential(ConvBNAct(in_ch, 32), ResidualBlock(32, 64, 2), ResidualBlock(64, 96, 2), ResidualBlock(96, 128, (2, 1) if isinstance((2, 1), int) else 1))
+        self.cnn = nn.Sequential(ConvBNAct(in_ch, 32), ResidualBlock(32, 64, 2), ResidualBlock(64, 96, 2), ResidualBlock(96, 128, (2, 1)))
         self.reduce = nn.AdaptiveAvgPool2d((8, None))
         self.lstm = nn.LSTM(128 * 8, hidden, num_layers=1, batch_first=True, bidirectional=True)
         self.attn = nn.Sequential(nn.Linear(hidden * 2, 64), nn.Tanh(), nn.Linear(64, 1))
@@ -577,6 +626,115 @@ class FocalLoss(nn.Module):
         return loss.sum(dim=1).mean()
 
 
+# ---------------------------------------------------------------------------
+# SAM: Sharpness-Aware Minimization (Foret et al., ICLR 2021)
+# ---------------------------------------------------------------------------
+
+class SAM(torch.optim.Optimizer):
+    """Sharpness-Aware Minimization wrapper around any base optimizer.
+
+    Usage:
+        base_opt = AdamW(params, lr=1e-3)
+        opt = SAM(base_opt, rho=0.05)
+
+        # step 1
+        loss1 = compute_loss(...)
+        loss1.backward()
+        opt.first_step(zero_grad=True)
+
+        # step 2 (at perturbed weights)
+        loss2 = compute_loss(...)
+        loss2.backward()
+        opt.second_step(zero_grad=True)
+    """
+
+    def __init__(self, base_optimizer, rho=0.05, adaptive=False):
+        assert rho >= 0.0
+        self.base_optimizer = base_optimizer
+        self.rho = rho
+        self.adaptive = adaptive
+        # Share param_groups with base optimizer so lr/wd are visible
+        self.param_groups = self.base_optimizer.param_groups
+        # Separate state for SAM perturbations (don't pollute base optimizer state)
+        self._sam_state = {}
+
+    @torch.no_grad()
+    def first_step(self, zero_grad=False):
+        grad_norm = self._grad_norm()
+        for group in self.param_groups:
+            scale = self.rho / (grad_norm + 1e-12)
+            for p in group["params"]:
+                if p.grad is None:
+                    continue
+                e_w = (torch.pow(p, 2) if self.adaptive else 1.0) * p.grad * scale
+                p.add_(e_w)
+                self._sam_state[id(p)] = e_w
+        if zero_grad:
+            self.base_optimizer.zero_grad(set_to_none=True)
+
+    @torch.no_grad()
+    def second_step(self, zero_grad=False):
+        for group in self.param_groups:
+            for p in group["params"]:
+                if p.grad is None:
+                    continue
+                if id(p) in self._sam_state:
+                    p.sub_(self._sam_state[id(p)])
+        self.base_optimizer.step()
+        if zero_grad:
+            self.base_optimizer.zero_grad(set_to_none=True)
+
+    def zero_grad(self, set_to_none=True):
+        self.base_optimizer.zero_grad(set_to_none=set_to_none)
+
+    def _grad_norm(self):
+        norms = []
+        for group in self.param_groups:
+            for p in group["params"]:
+                if p.grad is None:
+                    continue
+                g = (torch.pow(p, 2) if self.adaptive else 1.0) * p.grad
+                norms.append(g.norm(p=2))
+        if not norms:
+            return torch.tensor(0.0)
+        return torch.norm(torch.stack(norms), p=2)
+
+
+def make_sam_optimizer(params, lr, weight_decay, rho=0.05):
+    """Create a SAM optimizer wrapping AdamW."""
+    base = torch.optim.AdamW(params, lr=lr, weight_decay=weight_decay)
+    return SAM(base, rho=rho)
+
+
+# ---------------------------------------------------------------------------
+# Lungmix: Energy-aware spatial MixUp for respiratory spectrograms
+# ---------------------------------------------------------------------------
+
+def lungmix_data(x, y, tprob, alpha=0.3, mask_threshold=0.1):
+    """Lungmix: Mix spectrograms using energy-based lung region masks.
+
+    High-energy regions (lung sounds) are preserved from the original sample;
+    low-energy regions (background/noise) are mixed with another sample.
+    """
+    B, C, H, W = x.shape
+    lam = np.random.beta(alpha, alpha)
+    index = torch.randperm(B, device=x.device)
+
+    # Energy-based mask: high-energy = lung sounds
+    energy = x.pow(2).mean(dim=1, keepdim=True)  # [B, 1, H, W]
+    energy = energy / (energy.amax(dim=(2, 3), keepdim=True) + 1e-8)
+    mask = (energy > mask_threshold).float()
+
+    # Lung regions from original, background blended
+    mixed_x = mask * x + (1 - mask) * (lam * x + (1 - lam) * x[index])
+
+    y_a, y_b = y, y[index]
+    tprob_a, tprob_b = tprob, tprob[index]
+    tprob_mix = lam * tprob_a + (1 - lam) * tprob_b
+
+    return mixed_x, y_a, y_b, lam, tprob_mix
+
+
 def per_class_specificity(cm):
     total = cm.sum()
     vals = []
@@ -589,11 +747,30 @@ def per_class_specificity(cm):
     return np.array(vals, dtype=np.float32)
 
 
-def icbhi_score(y_true, y_pred):
-    normal = y_true == 0
-    abnormal = y_true != 0
-    sp = float(np.mean(y_pred[normal] == 0)) if normal.any() else 0.0
-    se = float(np.mean(y_pred[abnormal] != 0)) if abnormal.any() else 0.0
+def icbhi_score(y_true, y_pred, nc=4):
+    """
+    Calculate ICBHI score = (Sensitivity + Specificity) / 2.
+    - If nc == 4 (Strict 4-class classification):
+        Specificity = Recall of class 0 (Normal)
+        Sensitivity = Total correct predictions of classes 1, 2, 3 divided by total abnormal samples.
+    - If nc == 2 (Binary classification):
+        Standard Sensitivity/Specificity.
+    """
+    normal_mask = (y_true == 0)
+    abnormal_mask = (y_true != 0)
+
+    # Specificity is always the recall of class 0 (Normal)
+    sp = float(np.mean(y_pred[normal_mask] == 0)) if normal_mask.any() else 0.0
+
+    if nc == 4:
+        # Strict 4-class Sensitivity: predictions must match targets exactly
+        correct_abnormal = np.sum((y_true != 0) & (y_true == y_pred))
+        total_abnormal = np.sum(abnormal_mask)
+        se = float(correct_abnormal / total_abnormal) if total_abnormal > 0 else 0.0
+    else:
+        # Binary or 2-class: any non-zero prediction on abnormal samples is correct
+        se = float(np.mean(y_pred[abnormal_mask] != 0)) if abnormal_mask.any() else 0.0
+
     return se, sp, (se + sp) / 2.0
 
 
@@ -621,7 +798,7 @@ def compute_metrics(y_true, y_pred, y_prob, nc):
     cm = confusion_matrix(y_true, y_pred, labels=labels)
     prec, rec, f1, sup = precision_recall_fscore_support(y_true, y_pred, labels=labels, zero_division=0)
     spec = per_class_specificity(cm)
-    se, sp, score = icbhi_score(y_true, y_pred)
+    se, sp, score = icbhi_score(y_true, y_pred, nc)
     metrics = {"icbhi_score": float(score), "sensitivity": float(se), "specificity": float(sp), "accuracy": float(accuracy_score(y_true, y_pred)), "macro_f1": float(f1_score(y_true, y_pred, labels=labels, average="macro", zero_division=0)), "weighted_f1": float(f1_score(y_true, y_pred, labels=labels, average="weighted", zero_division=0)), "balanced_accuracy": float(balanced_accuracy_score(y_true, y_pred)), "confusion_matrix": cm.tolist()}
     metrics.update(binary_metrics_from_4class(y_true, y_pred))
     if y_prob is not None:
@@ -651,6 +828,75 @@ def sweep_threshold(y_true, probs):
         m = compute_metrics(y_true, pred, probs, probs.shape[1])
         if m["icbhi_score"] > best["icbhi_score"]:
             best = {"threshold": float(th), **m}
+    return best
+
+
+def apply_class_bias(probs, bias):
+    """Apply per-class bias to log-probabilities and re-normalize."""
+    biased = probs.copy()
+    for i, b in enumerate(bias):
+        if b != 0:
+            biased[:, i] += b
+    # Re-normalize via softmax
+    exp_p = np.exp(biased - biased.max(axis=1, keepdims=True))
+    return exp_p / exp_p.sum(axis=1, keepdims=True)
+
+
+def sweep_threshold_fine(y_true, probs):
+    """Enhanced threshold sweep with finer grid (0.001 resolution) + local refinement."""
+    nc = probs.shape[1]
+    best = {"threshold": 0.5, "icbhi_score": -1.0}
+    # Coarse sweep: 981 points
+    for th in np.linspace(0.01, 0.99, 981):
+        pred = threshold_predictions(probs, float(th))
+        se, sp, score = icbhi_score(y_true, pred, nc)
+        if score > best["icbhi_score"]:
+            best = {"threshold": float(th), "icbhi_score": float(score),
+                    "sensitivity": float(se), "specificity": float(sp)}
+    # Fine refinement around best: ±0.02 with 401 points
+    th_best = best["threshold"]
+    lo = max(0.01, th_best - 0.02)
+    hi = min(0.99, th_best + 0.02)
+    for th in np.linspace(lo, hi, 401):
+        pred = threshold_predictions(probs, float(th))
+        se, sp, score = icbhi_score(y_true, pred, nc)
+        if score > best["icbhi_score"]:
+            best = {"threshold": float(th), "icbhi_score": float(score),
+                    "sensitivity": float(se), "specificity": float(sp)}
+    # Per-class bias optimization for strict 4-class
+    if nc == 4:
+        best_bias = best.copy()
+        # Stage 1: Coarse grid
+        bias_grid = [-0.5, -0.3, -0.15, 0.0, 0.15, 0.3, 0.5]
+        for b1 in bias_grid:
+            for b2 in bias_grid:
+                for b3 in bias_grid:
+                    biased_probs = apply_class_bias(probs, [0.0, b1, b2, b3])
+                    for th in np.linspace(0.01, 0.99, 51):
+                        pred = threshold_predictions(biased_probs, float(th))
+                        se, sp, score = icbhi_score(y_true, pred, nc)
+                        if score > best_bias["icbhi_score"]:
+                            best_bias = {"threshold": float(th), "icbhi_score": float(score),
+                                         "sensitivity": float(se), "specificity": float(sp),
+                                         "bias": [0.0, float(b1), float(b2), float(b3)]}
+        # Stage 2: Fine refinement around best bias
+        if "bias" in best_bias:
+            b0, b1, b2, b3 = best_bias["bias"]
+            fine_grid = np.linspace(-0.1, 0.1, 5)
+            for fb1 in [b1 + d for d in fine_grid]:
+                for fb2 in [b2 + d for d in fine_grid]:
+                    for fb3 in [b3 + d for d in fine_grid]:
+                        biased_probs = apply_class_bias(probs, [0.0, fb1, fb2, fb3])
+                        for th in np.linspace(max(0.01, best_bias["threshold"] - 0.05),
+                                              min(0.99, best_bias["threshold"] + 0.05), 21):
+                            pred = threshold_predictions(biased_probs, float(th))
+                            se, sp, score = icbhi_score(y_true, pred, nc)
+                            if score > best_bias["icbhi_score"]:
+                                best_bias = {"threshold": float(th), "icbhi_score": float(score),
+                                             "sensitivity": float(se), "specificity": float(sp),
+                                             "bias": [0.0, float(fb1), float(fb2), float(fb3)]}
+        if best_bias["icbhi_score"] > best["icbhi_score"]:
+            best = best_bias
     return best
 
 
@@ -784,9 +1030,10 @@ def train_teacher(arch, seed, args, splits, stats, device, output_dir):
     init_wandb(args, f"{args.pipeline_name}-teacher-{arch}-seed-{seed}", {"arch": arch, "seed": seed, "params": count_params(model)[0]})
     train_ds = ICBHIDataset(splits["train"], args, stats, True)
     val_ds = ICBHIDataset(splits["val"], args, stats, False)
-    train_loader = make_loader(train_ds, args, splits["train"], balanced=True)
+    cb_beta = getattr(args, 'cb_beta', 0.0)
+    train_loader = make_loader(train_ds, args, splits["train"], balanced=True, beta=cb_beta)
     val_loader = make_loader(val_ds, args)
-    criterion = FocalLoss(class_weights(splits["train"], args.num_classes, device), args.focal_gamma, args.label_smoothing)
+    criterion = FocalLoss(class_weights(splits["train"], args.num_classes, device, beta=cb_beta), args.focal_gamma, args.label_smoothing)
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr_teacher, weight_decay=args.weight_decay)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=max(args.epochs_teacher, 1))
     best_score, best_epoch, patience = -1.0, 0, 0
@@ -905,6 +1152,131 @@ def abnormal_logit_from_4class(logits):
     return torch.logsumexp(logits[:, 1:], dim=1) - logits[:, 0]
 
 
+def smoothed_kd_loss(student_logits, teacher_probs, temperature, smoothing=0.15):
+    """
+    Knowledge Distillation loss with label smoothing on teacher soft labels.
+
+    Paper: Dong et al. 2025 - ADD-RSC (Expected +0.5-1.0% ICBHI)
+    Smoothing prevents overconfident teacher predictions.
+    """
+    nc = teacher_probs.size(1)
+    smoothed_teacher = (1 - smoothing) * teacher_probs + smoothing / nc
+    kd = -(smoothed_teacher * F.log_softmax(student_logits / temperature, dim=1)
+           ).sum(dim=1).mean() * (temperature ** 2)
+    return kd
+
+
+def select_top_teachers(val_logits, val_records, nc, k=5):
+    """
+    Select top-K teacher checkpoints based on validation ICBHI Score.
+
+    Paper: Toikkanen & Kim 2025 - KD from Ensembles (Expected +0.2-0.5%)
+    """
+    y_true = np.array([get_label(r, nc) for r in val_records])
+    scores = []
+    for t in range(val_logits.shape[0]):
+        probs = F.softmax(torch.tensor(val_logits[t]), dim=1).numpy()
+        pred = probs.argmax(axis=1)
+        se, sp, score = icbhi_score(y_true, pred, nc)
+        scores.append(score)
+    top_k_indices = np.argsort(scores)[-k:]
+    top_k_scores = [scores[i] for i in top_k_indices]
+    print(f"  Curated ensemble: selected top-{k} teachers with scores: {[f'{s:.4f}' for s in top_k_scores]}")
+    return top_k_indices.tolist()
+
+
+# ---------------------------------------------------------------------------
+# Patient-Aware Feature Alignment (PAFA)
+# Jeong & Kim 2025 - Expected +0.4-1.35% ICBHI
+# ---------------------------------------------------------------------------
+
+class PatientProjectionHead(nn.Module):
+    """Auxiliary projection head for patient-aware losses. Removed at inference."""
+    def __init__(self, feat_dim, proj_dim=64):
+        super().__init__()
+        self.proj = nn.Sequential(
+            nn.Linear(feat_dim, proj_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(proj_dim, proj_dim)
+        )
+
+    def forward(self, features):
+        return F.normalize(self.proj(features), dim=1)
+
+
+class PatientAwareLoss(nn.Module):
+    """
+    Patient Cohesion-Separation Loss (PCSL) + Global Patient Alignment Loss (GPAL).
+
+    Paper: Jeong & Kim 2025 - PAFA
+    PCSL: Fisher's LDA inspired - cluster same patient, separate different patients
+    GPAL: Align all patient centroids toward global center
+    """
+    def __init__(self, feat_dim, lambda_pcsl=50.0, lambda_gpal=0.0005):
+        super().__init__()
+        self.lambda_pcsl = lambda_pcsl
+        self.lambda_gpal = lambda_gpal
+        self.proj_head = PatientProjectionHead(feat_dim)
+
+    def forward(self, features, patient_ids):
+        z = self.proj_head(features)
+        unique_patients = torch.unique(patient_ids)
+        n_patients = len(unique_patients)
+        if n_patients < 2:
+            return torch.tensor(0.0, device=features.device)
+
+        centroids = []
+        for pid in unique_patients:
+            mask = (patient_ids == pid)
+            centroids.append(z[mask].mean(dim=0))
+        centroids = torch.stack(centroids)
+        global_centroid = z.mean(dim=0)
+
+        # Sw: within-class scatter
+        Sw = torch.tensor(0.0, device=features.device)
+        for i, pid in enumerate(unique_patients):
+            mask = (patient_ids == pid)
+            Sw += ((z[mask] - centroids[i]) ** 2).sum()
+        Sw /= len(z)
+
+        # Sb: between-class scatter
+        Sb = torch.tensor(0.0, device=features.device)
+        for i in range(n_patients):
+            n_i = (patient_ids == unique_patients[i]).sum().float()
+            Sb += n_i * ((centroids[i] - global_centroid) ** 2).sum()
+        Sb /= len(z)
+
+        pcsl = Sw / (Sb + 1e-8)
+        gpal = ((centroids - global_centroid.unsqueeze(0)) ** 2).sum(dim=1).mean()
+        return self.lambda_pcsl * pcsl + self.lambda_gpal * gpal
+
+
+class SupervisedContrastiveLoss(nn.Module):
+    """
+    Supervised Contrastive Learning Loss.
+
+    Paper: Dong et al. 2025 - RSC-FTF (Expected +0.5-1.0%)
+    Pulls features of same class together, pushes different classes apart.
+    """
+    def __init__(self, temperature=0.1):
+        super().__init__()
+        self.temperature = temperature
+
+    def forward(self, features, labels):
+        device = features.device
+        batch_size = features.size(0)
+        sim = torch.matmul(features, features.T) / self.temperature
+        labels = labels.unsqueeze(1)
+        mask = (labels == labels.T).float()
+        mask.fill_diagonal_(0)
+        logits_max, _ = sim.max(dim=1, keepdim=True)
+        logits = sim - logits_max.detach()
+        exp_logits = torch.exp(logits)
+        log_prob = logits - torch.log(exp_logits.sum(dim=1, keepdim=True) + 1e-8)
+        mean_log_prob = (mask * log_prob).sum(dim=1) / (mask.sum(dim=1) + 1e-8)
+        return -mean_log_prob.mean()
+
+
 def train_student(args, splits, stats, device, output_dir):
     in_ch = 3 if args.input_view == "logmel_delta" else 1
     val_logits, teacher_names = load_teacher_logits(args, output_dir, "val", splits["val"])
@@ -918,17 +1290,27 @@ def train_student(args, splits, stats, device, output_dir):
     init_wandb(args, f"{args.pipeline_name}-student-{args.student_arch}", {"student_params": count_params(student)[0], "teacher_names": teacher_names})
     base_train = ICBHIDataset(splits["train"], args, stats, True)
     train_ds = StudentKDDataset(base_train, train_probs)
-    sampler = WeightedRandomSampler(sample_weights(splits["train"], args.num_classes), len(splits["train"]), replacement=True)
+    cb_beta = getattr(args, 'cb_beta', 0.0)
+    sampler = WeightedRandomSampler(sample_weights(splits["train"], args.num_classes, beta=cb_beta), len(splits["train"]), replacement=True)
     train_loader = DataLoader(train_ds, batch_size=args.batch_size, sampler=sampler, num_workers=args.num_workers, pin_memory=torch.cuda.is_available())
     val_loader = make_loader(ICBHIDataset(splits["val"], args, stats, False), args)
-    hard = FocalLoss(class_weights(splits["train"], args.num_classes, device), args.focal_gamma, args.label_smoothing)
-    opt = torch.optim.AdamW(student.parameters(), lr=args.lr_student, weight_decay=args.weight_decay)
+    cw = class_weights(splits["train"], args.num_classes, device, beta=cb_beta)
+    hard = FocalLoss(cw, args.focal_gamma, args.label_smoothing)
+    # Contrastive loss for subclass separation (Dong et al. 2025 RSC-FTF)
+    contrastive_weight = getattr(args, 'contrastive_weight', 0.0)
+    if contrastive_weight > 0:
+        contrastive_loss_fn = SupervisedContrastiveLoss(temperature=0.1)
+    kd_smoothing = getattr(args, 'kd_smoothing', 0.0)
+    if args.use_sam:
+        opt = make_sam_optimizer(student.parameters(), args.lr_student, args.weight_decay, rho=args.sam_rho)
+    else:
+        opt = torch.optim.AdamW(student.parameters(), lr=args.lr_student, weight_decay=args.weight_decay)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=max(args.epochs_student, 1))
     best_score, best_epoch, patience = -1.0, 0, 0
     best_tiebreak_macro = -1.0
     best_tiebreak_bal = -1.0
     best_tiebreak_both = -1.0
-    min_both_f1_guard = 0.05 if args.num_classes == 4 else -1.0
+    min_both_f1_guard = (args.min_both_f1_guard if args.min_both_f1_guard >= 0 else (0.05 if args.num_classes == 4 else -1.0))
     best_path = student_dir / "best.pt"
     for epoch in range(1, args.epochs_student + 1):
         student.train()
@@ -936,18 +1318,81 @@ def train_student(args, splits, stats, device, output_dir):
         for x, y, _, tprob in train_loader:
             x, y, tprob = x.to(device), y.to(device), tprob.to(device)
             opt.zero_grad(set_to_none=True)
-            logits = student(x)
-            hard_loss = hard(logits, y)
-            kd_loss = -(tprob * F.log_softmax(logits / args.temperature, dim=1)).sum(dim=1).mean() * (args.temperature ** 2)
-            hard_bin = (y != 0).float()
-            teacher_bin = (1.0 - tprob[:, 0]).clamp(0, 1)
-            bin_target = 0.5 * hard_bin + 0.5 * teacher_bin
-            bin_loss = F.binary_cross_entropy_with_logits(abnormal_logit_from_4class(logits), bin_target)
-            loss = args.hard_weight * hard_loss + args.kd_weight * kd_loss + args.binary_weight * bin_loss
+            if args.use_lungmix:
+                x_mixed, y_a, y_b, lam, tprob_mixed = lungmix_data(x, y, tprob, alpha=args.lungmix_alpha)
+                logits = student(x_mixed)
+                hard_loss = lam * hard(logits, y_a) + (1 - lam) * hard(logits, y_b)
+            elif args.mixup_alpha > 0:
+                # Standard MixUp
+                lam = np.random.beta(args.mixup_alpha, args.mixup_alpha)
+                idx = torch.randperm(x.size(0), device=device)
+                x_mixed = lam * x + (1 - lam) * x[idx]
+                y_a, y_b = y, y[idx]
+                tprob_a, tprob_b = tprob, tprob[idx]
+                tprob_mixed = lam * tprob_a + (1 - lam) * tprob_b
+                logits = student(x_mixed)
+                hard_loss = lam * hard(logits, y_a) + (1 - lam) * hard(logits, y_b)
+            else:
+                logits = student(x)
+                hard_loss = hard(logits, y)
+                tprob_mixed = tprob
+            # KD loss: use smoothed KD if kd_smoothing > 0
+            if kd_smoothing > 0:
+                kd_loss = smoothed_kd_loss(logits, tprob_mixed, args.temperature, kd_smoothing)
+            else:
+                kd_loss = -(tprob_mixed * F.log_softmax(logits / args.temperature, dim=1)).sum(dim=1).mean() * (args.temperature ** 2)
+            # Binary loss: skip entirely when binary_weight=0 (strict 4-class focus)
+            if args.binary_weight > 0:
+                if args.use_lungmix:
+                    hard_bin_a = (y_a != 0).float()
+                    hard_bin_b = (y_b != 0).float()
+                    teacher_bin = (1.0 - tprob_mixed[:, 0]).clamp(0, 1)
+                    bin_target = lam * (0.5 * hard_bin_a + 0.5 * teacher_bin) + (1 - lam) * (0.5 * hard_bin_b + 0.5 * teacher_bin)
+                else:
+                    hard_bin = (y != 0).float()
+                    teacher_bin = (1.0 - tprob[:, 0]).clamp(0, 1)
+                    bin_target = 0.5 * hard_bin + 0.5 * teacher_bin
+                bin_loss = F.binary_cross_entropy_with_logits(abnormal_logit_from_4class(logits), bin_target)
+            else:
+                bin_loss = torch.tensor(0.0, device=device)
+            # Contrastive loss for subclass feature separation
+            if contrastive_weight > 0:
+                feat = logits  # use logits as feature proxy
+                con_loss = contrastive_loss_fn(feat, y)
+            else:
+                con_loss = torch.tensor(0.0, device=device)
+            loss = args.hard_weight * hard_loss + args.kd_weight * kd_loss + args.binary_weight * bin_loss + contrastive_weight * con_loss
             loss.backward()
             if args.grad_clip > 0:
                 nn.utils.clip_grad_norm_(student.parameters(), args.grad_clip)
-            opt.step()
+            if args.use_sam:
+                opt.first_step(zero_grad=True)
+                # Second forward pass at perturbed weights
+                if args.use_lungmix or args.mixup_alpha > 0:
+                    logits2 = student(x_mixed)
+                    hard_loss2 = lam * hard(logits2, y_a) + (1 - lam) * hard(logits2, y_b)
+                else:
+                    logits2 = student(x)
+                    hard_loss2 = hard(logits2, y)
+                if kd_smoothing > 0:
+                    kd_loss2 = smoothed_kd_loss(logits2, tprob_mixed, args.temperature, kd_smoothing)
+                else:
+                    kd_loss2 = -(tprob_mixed * F.log_softmax(logits2 / args.temperature, dim=1)).sum(dim=1).mean() * (args.temperature ** 2)
+                if args.binary_weight > 0:
+                    bin_loss2 = F.binary_cross_entropy_with_logits(abnormal_logit_from_4class(logits2), bin_target)
+                else:
+                    bin_loss2 = torch.tensor(0.0, device=device)
+                if contrastive_weight > 0:
+                    con_loss2 = contrastive_loss_fn(logits2, y)
+                else:
+                    con_loss2 = torch.tensor(0.0, device=device)
+                loss2 = args.hard_weight * hard_loss2 + args.kd_weight * kd_loss2 + args.binary_weight * bin_loss2 + contrastive_weight * con_loss2
+                loss2.backward()
+                if args.grad_clip > 0:
+                    nn.utils.clip_grad_norm_(student.parameters(), args.grad_clip)
+                opt.second_step(zero_grad=True)
+            else:
+                opt.step()
             n = x.size(0)
             total += float(loss.item()) * n
             hard_total += float(hard_loss.item()) * n
@@ -955,7 +1400,7 @@ def train_student(args, splits, stats, device, output_dir):
             bin_total += float(bin_loss.item()) * n
         sched.step()
         val_m, yv, _, pv, _ = evaluate_model(student, val_loader, device, args.num_classes)
-        tuned = sweep_threshold(yv, pv)
+        tuned = sweep_threshold_fine(yv, pv) if args.fine_threshold else sweep_threshold(yv, pv)
         score = float(tuned["icbhi_score"] if args.selection_metric == "threshold_icbhi_score" else val_m[args.selection_metric])
         both_f1 = float(val_m.get("both_f1", 0.0)) if args.num_classes == 4 else 0.0
         meets_guard = both_f1 >= min_both_f1_guard
@@ -1099,6 +1544,8 @@ def parse_args():
     p.add_argument("--freq_mask", type=int, default=12)
     p.add_argument("--time_mask", type=int, default=48)
     p.add_argument("--speed_perturb", action=argparse.BooleanOptionalAction, default=True)
+    p.add_argument("--use_vtlp", action=argparse.BooleanOptionalAction, default=False,
+                   help="Enable VTLP frequency warping augmentation (+3.19% ICBHI)")
     p.add_argument("--epochs_teacher", "--epochs", type=int, default=80)
     p.add_argument("--epochs_student", type=int, default=120)
     p.add_argument("--batch_size", type=int, default=32)
@@ -1113,6 +1560,14 @@ def parse_args():
     p.add_argument("--hard_weight", type=float, default=0.35)
     p.add_argument("--kd_weight", type=float, default=0.45)
     p.add_argument("--binary_weight", type=float, default=0.20)
+    p.add_argument("--kd_smoothing", type=float, default=0.0,
+                   help="Label smoothing on teacher soft labels (0.15 recommended)")
+    p.add_argument("--cb_beta", type=float, default=0.0,
+                   help="Class-balanced beta for effective number of samples (0.9999 recommended, 0=disabled)")
+    p.add_argument("--contrastive_weight", type=float, default=0.0,
+                   help="Weight for supervised contrastive loss (0.05 recommended, 0=disabled)")
+    p.add_argument("--curated_k", type=int, default=0,
+                   help="Select top-K teachers for curated ensemble (0=use all)")
     p.add_argument("--selection_metric", choices=["icbhi_score", "macro_f1", "balanced_accuracy", "threshold_icbhi_score"], default="threshold_icbhi_score")
     p.add_argument("--benchmark_protocol", choices=["official_icbhi", "add_rsc"], default="add_rsc")
     p.add_argument("--add_rsc_split_seed", type=int, default=1)
@@ -1131,6 +1586,13 @@ def parse_args():
     p.add_argument("--wandb_entity", default="vhieu4344")
     p.add_argument("--wandb_run_name", default=None)
     p.add_argument("--wandb_mode", choices=["online", "offline", "disabled"], default="online")
+    p.add_argument("--use_lungmix", action="store_true", help="Enable Lungmix energy-aware MixUp augmentation during student training")
+    p.add_argument("--lungmix_alpha", type=float, default=0.3, help="Beta distribution alpha for Lungmix mixing coefficient")
+    p.add_argument("--mixup_alpha", type=float, default=0.0, help="Standard MixUp alpha (0=disabled, 0.2-0.4 recommended)")
+    p.add_argument("--fine_threshold", action="store_true", help="Use fine-grained threshold sweep (0.001 resolution)")
+    p.add_argument("--use_sam", action="store_true", help="Use SAM (Sharpness-Aware Minimization) optimizer for student training")
+    p.add_argument("--sam_rho", type=float, default=0.05, help="Rho parameter for SAM optimizer")
+    p.add_argument("--min_both_f1_guard", type=float, default=-1.0, help="Minimum both_f1 to save checkpoint (-1 = use default 0.05 for 4-class)")
     return p.parse_args()
 
 

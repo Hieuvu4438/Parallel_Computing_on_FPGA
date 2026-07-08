@@ -29,8 +29,14 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable
 
+import os
+os.environ["OMP_NUM_THREADS"] = "2"
+os.environ["MKL_NUM_THREADS"] = "2"
+os.environ["OPENBLAS_NUM_THREADS"] = "2"
+
 import numpy as np
 import torch
+torch.set_num_threads(2)
 import torch.nn as nn
 import torch.nn.functional as F
 from scipy import signal as sp_signal
@@ -807,17 +813,30 @@ def per_class_specificity(cm: np.ndarray) -> np.ndarray:
     return np.array(values, dtype=np.float32)
 
 
-def icbhi_score(y_true: np.ndarray, y_pred: np.ndarray, num_classes: int) -> tuple[float, float, float]:
+def icbhi_score(y_true: np.ndarray, y_pred: np.ndarray, num_classes: int = 4) -> tuple[float, float, float]:
     """
-    Official ICBHI score = (Sensitivity + Specificity) / 2
-    For 4-class: Sensitivity = recall of abnormal classes, Specificity = recall of Normal
-    For 2-class: standard SE/SP
+    Official ICBHI score = (Sensitivity + Specificity) / 2.
+    - If num_classes == 4 (Strict 4-class classification):
+        Specificity = Recall of class 0 (Normal)
+        Sensitivity = Total correct predictions of classes 1, 2, 3 divided by total abnormal samples.
+    - If num_classes == 2 (Binary classification):
+        Standard Sensitivity/Specificity.
     """
-    normal_idx = 0
-    normal_mask = y_true == normal_idx
-    abnormal_mask = y_true != normal_idx
-    specificity = float(np.mean(y_pred[normal_mask] == normal_idx)) if normal_mask.any() else 0.0
-    sensitivity = float(np.mean(y_pred[abnormal_mask] != normal_idx)) if abnormal_mask.any() else 0.0
+    normal_mask = (y_true == 0)
+    abnormal_mask = (y_true != 0)
+
+    # Specificity is always the recall of class 0 (Normal)
+    specificity = float(np.mean(y_pred[normal_mask] == 0)) if normal_mask.any() else 0.0
+
+    if num_classes == 4:
+        # Strict 4-class Sensitivity: predictions must match targets exactly
+        correct_abnormal = np.sum((y_true != 0) & (y_true == y_pred))
+        total_abnormal = np.sum(abnormal_mask)
+        sensitivity = float(correct_abnormal / total_abnormal) if total_abnormal > 0 else 0.0
+    else:
+        # Binary or 2-class: any non-zero prediction on abnormal samples is correct
+        sensitivity = float(np.mean(y_pred[abnormal_mask] != 0)) if abnormal_mask.any() else 0.0
+
     return sensitivity, specificity, (sensitivity + specificity) / 2.0
 
 
@@ -1494,7 +1513,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
-    torch.set_num_threads(1)
+    torch.set_num_threads(2)
     args = parse_args()
     set_seed(args.seed)
     device = default_device(args.device)

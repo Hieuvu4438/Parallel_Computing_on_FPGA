@@ -414,8 +414,9 @@ class FusionTeacher(nn.Module):
         f_temp = self.temporal_branch(x).flatten(1)  # [B, 128]
         combined = torch.cat([f_spec, f_temp], dim=1)  # [B, 256]
         weights = self.fusion_attn(combined)  # [B, 2]
-        fused = weights[:, 0:1] * f_spec + weights[:, 1:2] * f_temp
-        return self.head(combined)
+        # Attention-weighted concatenation (preserves 256-dim for head)
+        fused = torch.cat([weights[:, 0:1] * f_spec, weights[:, 1:2] * f_temp], dim=1)
+        return self.head(fused)
 
 
 class CRNNAttentionTeacher(nn.Module):
@@ -1079,7 +1080,7 @@ def train_student_mega_ensemble(args, splits, stats, device, output_dir):
     projector = FeatureProjector(s_ch, proj_dim).to(device)
 
     # Adversarial discriminator
-    disc = FeatureDiscriminator(proj_dim * 8 * 8).to(device)
+    disc = FeatureDiscriminator(proj_dim * 8 * 8 * 3).to(device)
 
     # KD losses
     dkd_loss_fn = DecoupledKDLoss(temperature=args.temperature)
@@ -1112,17 +1113,24 @@ def train_student_mega_ensemble(args, splits, stats, device, output_dir):
     val_loader = base.make_loader(base.ICBHIDataset(splits["val"], args, stats, False), args)
 
     # --- Optimizers ---
-    student_params = (list(student.parameters()) +
-                      list(projector.parameters()) +
-                      list(dkd_loss_fn.parameters()) if hasattr(dkd_loss_fn, 'parameters') else [])
-    opt_s = torch.optim.AdamW(student.parameters(), lr=args.lr_student,
-                               weight_decay=args.weight_decay)
-    opt_proj = torch.optim.AdamW(projector.parameters(), lr=args.lr_student,
-                                  weight_decay=args.weight_decay)
+    use_sam = getattr(args, 'use_sam', False)
+    if use_sam:
+        opt_s = base.make_sam_optimizer(student.parameters(), lr=args.lr_student,
+                                        weight_decay=args.weight_decay,
+                                        rho=getattr(args, 'sam_rho', 0.05))
+        opt_proj = base.make_sam_optimizer(projector.parameters(), lr=args.lr_student,
+                                           weight_decay=args.weight_decay,
+                                           rho=getattr(args, 'sam_rho', 0.05))
+    else:
+        opt_s = torch.optim.AdamW(student.parameters(), lr=args.lr_student,
+                                   weight_decay=args.weight_decay)
+        opt_proj = torch.optim.AdamW(projector.parameters(), lr=args.lr_student,
+                                      weight_decay=args.weight_decay)
     opt_disc = torch.optim.AdamW(disc.parameters(), lr=args.lr_student * 0.5,
                                   weight_decay=args.weight_decay)
 
-    sched_s = torch.optim.lr_scheduler.CosineAnnealingLR(opt_s, T_max=max(args.epochs_student, 1))
+    sched_s = torch.optim.lr_scheduler.CosineAnnealingLR(
+        opt_s.base_optimizer if use_sam else opt_s, T_max=max(args.epochs_student, 1))
 
     # --- Checkpoint tracking ---
     best_score, best_epoch, patience = -1.0, 0, 0
@@ -1180,14 +1188,18 @@ def train_student_mega_ensemble(args, splits, stats, device, output_dir):
             dkd_loss = dkd_loss_fn(logits, tprob_mix, y)
 
             # --- Feature distillation (from EMA teacher) ---
-            feat_loss = torch.tensor(0.0, device=device)
-            attn_loss = torch.tensor(0.0, device=device)
-            rkd_loss = torch.tensor(0.0, device=device)
+            feat_loss = torch.zeros(1, device=device, requires_grad=True)
+            attn_loss = torch.zeros(1, device=device, requires_grad=True)
+            rkd_loss = torch.zeros(1, device=device, requires_grad=True)
 
             if epoch > 5:
                 with torch.no_grad():
-                    ema_logits, ema_feats = ema.get_ema_model()(x) if hasattr(
-                        ema.get_ema_model(), '__call__') else (None, {})
+                    ema_out = ema.get_ema_model()(x)
+                    if isinstance(ema_out, tuple):
+                        ema_logits, ema_feats = ema_out
+                    else:
+                        ema_logits = ema_out
+                        ema_feats = {}
                     # Use student itself as feature reference for self-distillation
                     _, ref_feats = student(x)
 
@@ -1213,40 +1225,39 @@ def train_student_mega_ensemble(args, splits, stats, device, output_dir):
                         rkd_loss = rkd_loss_fn(s_projected, ema_projected)
 
             # --- Adversarial loss ---
-            adv_loss = torch.tensor(0.0, device=device)
+            adv_loss = torch.zeros(1, device=device, requires_grad=True)
             if epoch > 10 and args.adv_weight > 0:
                 s_flat = torch.cat([
                     F.adaptive_avg_pool2d(f, 8).flatten(1) for f in s_projected
                 ], dim=1)
                 # Discriminator step
                 with torch.no_grad():
-                    ema_logits_d, ema_feats_d = ema.get_ema_model()(x) if hasattr(
-                        ema.get_ema_model(), '__call__') else (None, {})
-                    if ema_logits_d is not None:
-                        ema_s_d = FeatureExtractingStudent(ema.get_ema_model())
-                        _, ema_f_d = ema_s_d(x)
-                        ema_proj_d = projector([
-                            ema_f_d.get("feat_early", torch.zeros(1)),
-                            ema_f_d.get("feat_mid", torch.zeros(1)),
-                            ema_f_d.get("feat_late", torch.zeros(1)),
-                        ])
-                        t_flat = torch.cat([
-                            F.adaptive_avg_pool2d(f, 8).flatten(1) for f in ema_proj_d
-                        ], dim=1)
+                    ema_out_d = ema.get_ema_model()(x)
+                    ema_logits_d = ema_out_d[0] if isinstance(ema_out_d, tuple) else ema_out_d
+                    ema_s_d = FeatureExtractingStudent(ema.get_ema_model())
+                    _, ema_f_d = ema_s_d(x)
+                    ema_proj_d = projector([
+                        ema_f_d.get("feat_early", torch.zeros(1)),
+                        ema_f_d.get("feat_mid", torch.zeros(1)),
+                        ema_f_d.get("feat_late", torch.zeros(1)),
+                    ])
+                    t_flat = torch.cat([
+                        F.adaptive_avg_pool2d(f, 8).flatten(1) for f in ema_proj_d
+                    ], dim=1)
 
-                        opt_disc.zero_grad(set_to_none=True)
-                        d_real = disc(t_flat.detach())
-                        d_fake = disc(s_flat.detach())
-                        d_loss = -(torch.log(d_real + 1e-8).mean() +
-                                   torch.log(1 - d_fake + 1e-8).mean())
-                        d_loss.backward()
-                        opt_disc.step()
+                    opt_disc.zero_grad(set_to_none=True)
+                    d_real = disc(t_flat.detach())
+                    d_fake = disc(s_flat.detach())
+                    d_loss = -(torch.log(d_real + 1e-8).mean() +
+                               torch.log(1 - d_fake + 1e-8).mean())
+                    d_loss.backward()
+                    opt_disc.step()
 
-                        d_fake_for_g = disc(s_flat)
-                        adv_loss = -torch.log(d_fake_for_g + 1e-8).mean()
+                    d_fake_for_g = disc(s_flat)
+                    adv_loss = -torch.log(d_fake_for_g + 1e-8).mean()
 
             # --- EMA teacher KD ---
-            ema_kd_loss = torch.tensor(0.0, device=device)
+            ema_kd_loss = torch.zeros(1, device=device, requires_grad=True)
             if epoch > args.ema_warmup:
                 with torch.no_grad():
                     ema_logits_kd = ema.get_ema_model()(x)
@@ -1275,14 +1286,36 @@ def train_student_mega_ensemble(args, splits, stats, device, output_dir):
                     + args.ema_weight * ema_kd_loss
                     + w_bin * bin_loss)
 
-            opt_s.zero_grad(set_to_none=True)
-            opt_proj.zero_grad(set_to_none=True)
-            loss.backward()
-            if args.grad_clip > 0:
-                nn.utils.clip_grad_norm_(student.parameters(), args.grad_clip)
-                nn.utils.clip_grad_norm_(projector.parameters(), args.grad_clip)
-            opt_s.step()
-            opt_proj.step()
+            if use_sam:
+                # SAM first step
+                opt_s.zero_grad(set_to_none=True)
+                opt_proj.zero_grad(set_to_none=True)
+                loss.backward()
+                if args.grad_clip > 0:
+                    nn.utils.clip_grad_norm_(student.parameters(), args.grad_clip)
+                    nn.utils.clip_grad_norm_(projector.parameters(), args.grad_clip)
+                opt_s.first_step(zero_grad=True)
+                opt_proj.first_step(zero_grad=True)
+                # SAM second step (simplified: just KD + hard loss at perturbed weights)
+                logits2, s_feats2 = student(x if not use_mixup else x_mix)
+                kd_loss2 = -(tprob_mix * F.log_softmax(logits2 / args.temperature, dim=1)).sum(dim=1).mean() * (args.temperature ** 2)
+                hard_loss2 = cb_focal(logits2, y if not use_mixup else y_a)
+                loss2 = w_hard * hard_loss2 + w_kd * kd_loss2
+                loss2.backward()
+                if args.grad_clip > 0:
+                    nn.utils.clip_grad_norm_(student.parameters(), args.grad_clip)
+                    nn.utils.clip_grad_norm_(projector.parameters(), args.grad_clip)
+                opt_s.second_step(zero_grad=True)
+                opt_proj.second_step(zero_grad=True)
+            else:
+                opt_s.zero_grad(set_to_none=True)
+                opt_proj.zero_grad(set_to_none=True)
+                loss.backward()
+                if args.grad_clip > 0:
+                    nn.utils.clip_grad_norm_(student.parameters(), args.grad_clip)
+                    nn.utils.clip_grad_norm_(projector.parameters(), args.grad_clip)
+                opt_s.step()
+                opt_proj.step()
 
             # Update EMA
             if epoch > args.ema_warmup:
@@ -1306,7 +1339,8 @@ def train_student_mega_ensemble(args, splits, stats, device, output_dir):
         # --- Validation ---
         eval_model = ema.get_ema_model() if epoch > args.ema_warmup else student_raw
         val_m, yv, _, pv, _ = base.evaluate_model(eval_model, val_loader, device, nc)
-        tuned = base.sweep_threshold(yv, pv)
+        sweep_fn = base.sweep_threshold_fine if getattr(args, 'fine_threshold', False) else base.sweep_threshold
+        tuned = sweep_fn(yv, pv)
         score = float(tuned["icbhi_score"] if args.selection_metric == "threshold_icbhi_score"
                       else val_m[args.selection_metric])
         both_f1 = float(val_m.get("both_f1", 0.0)) if nc == 4 else 0.0
@@ -1551,9 +1585,9 @@ def evaluate_student_tta(model, loader, device, args, n_tta=10):
 def parse_args():
     args = base.parse_args()
 
-    # Pipeline identity
+    # Pipeline identity — separate output dirs for 2-class and 4-class
     if args.pipeline_name == "icbhi_kd_multiview_ensemble":
-        args.pipeline_name = "icbhi_kd_s4_transformer_mega_ensemble"
+        args.pipeline_name = f"icbhi_kd_s4_transformer_mega_{args.num_classes}class"
 
     # Official ICBHI protocol
     if args.benchmark_protocol == "add_rsc":
@@ -1615,7 +1649,7 @@ def parse_args():
         # Class-balanced
         "cb_beta": 0.9999,
         # Curriculum
-        "curriculum_start": 0.4,
+        "curriculum_start": 1.0,
         "curriculum_warmup": 25,
         # Progressive KD
         "hard_weight_start": 0.40,
@@ -1631,6 +1665,11 @@ def parse_args():
         "ast_embed_dim": 192,
         "ast_depth": 4,
         "ast_heads": 3,
+        # SOTA upgrades
+        "use_sam": False,
+        "sam_rho": 0.02,
+        "use_lungmix": True,
+        "fine_threshold": True,
     }
     for k, v in defaults.items():
         if not hasattr(args, k):
@@ -1708,6 +1747,18 @@ def train_s4_teacher(arch, seed, args, splits, stats, device, output_dir):
     best_score, best_epoch, patience = -1.0, 0, 0
     teacher_dir = ensure_dir(output_dir / "teachers" / arch / f"seed_{seed}")
     best_path = teacher_dir / "best.pt"
+
+    # Validate existing checkpoint compatibility
+    if best_path.exists():
+        try:
+            old_ckpt = torch.load(best_path, map_location="cpu")
+            old_nc = old_ckpt.get("args", {}).get("num_classes", None)
+            if old_nc is not None and old_nc != args.num_classes:
+                print(f"  [WARN] Checkpoint {best_path} was trained with num_classes={old_nc}, "
+                      f"current={args.num_classes}. Deleting and re-training.", flush=True)
+                best_path.unlink()
+        except Exception:
+            pass
 
     for epoch in range(1, args.epochs_teacher + 1):
         model.train()
